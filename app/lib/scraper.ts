@@ -42,14 +42,29 @@ async function getChromium() {
 }
 
 async function launchBrowser() {
-  const deps = await getChromium();
-  if (!deps) throw new Error("Chromium not available");
-  const { chromium, playwright } = deps;
-  const execPath = await chromium.executablePath(
+  const { chromium } = await import("playwright-core");
+
+  // ── Railway / persistent server: use system Chromium ──────────────────────
+  const systemChromium =
+    process.env.CHROMIUM_PATH ??  // allow manual override
+    (process.env.RAILWAY_ENVIRONMENT ? "/run/current-system/sw/bin/chromium" : null) ??
+    (process.platform !== "win32" ? (() => {
+      const { execSync } = require("child_process");
+      try { return execSync("which chromium chromium-browser google-chrome 2>/dev/null").toString().split("\n")[0].trim() || null; } catch { return null; }
+    })() : null);
+
+  if (systemChromium) {
+    return chromium.launch({ executablePath: systemChromium, args: CHROMIUM_ARGS, headless: true });
+  }
+
+  // ── Vercel / Lambda: use sparticuz chromium-min ────────────────────────────
+  const sparticuz = (await import("@sparticuz/chromium-min")).default;
+  const execPath = await sparticuz.executablePath(
     "https://github.com/Sparticuz/chromium/releases/download/v133.0.0/chromium-v133.0.0-pack.tar"
   );
-  return playwright.chromium.launch({ args: CHROMIUM_ARGS, executablePath: execPath, headless: true });
+  return chromium.launch({ args: CHROMIUM_ARGS, executablePath: execPath, headless: true });
 }
+
 
 /** Block images/styles/fonts to save RAM */
 async function optimizePage(page: any) {
