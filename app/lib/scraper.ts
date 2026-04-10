@@ -184,15 +184,18 @@ export async function executeBuy(egpAmount: number): Promise<boolean> {
     });
     await page.waitForTimeout(2000);
 
-    // ── Step 2: EGP mode is already selected by default; just clear & type amount
+    // ── Step 2: Fill EGP amount using React-compatible method ────────────────
     const amountInput = await page.$('input[type="text"], input[type="number"]');
     if (amountInput) {
       await amountInput.click({ clickCount: 3 });
-      await amountInput.type(String(Math.floor(egpAmount)), { delay: 80 });
+      await amountInput.fill(String(Math.floor(egpAmount)));        // React-compatible fill
+      await amountInput.dispatchEvent("input");                     // trigger React onChange
+      await amountInput.dispatchEvent("change");
     }
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(2000); // wait for React to re-render and enable Checkout
 
-    // ── Step 3: Click Checkout ────────────────────────────────────────────────
+    // ── Step 3: Wait for Checkout to be enabled then click ────────────────────
+    await page.waitForSelector('text=Checkout:not([disabled])', { timeout: 15000 }).catch(() => {});
     await page.click('text=Checkout');
     await page.waitForTimeout(4000);
 
