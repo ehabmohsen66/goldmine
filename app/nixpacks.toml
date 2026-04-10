@@ -1,3 +1,0 @@
-# Tell Railway's Nixpacks to install Chromium + dependencies
-[phases.setup]
-nixPkgs = ["chromium", "nss", "freetype", "harfbuzz", "ca-certificates", "ttf-dejavu"]
