@@ -9,15 +9,15 @@ const LOGIN_URL = "https://mngm.com/account/login";
 const MNGM_EMAIL = process.env.MNGM_EMAIL ?? "";
 const MNGM_PASSWORD = process.env.MNGM_PASSWORD ?? "";
 
-// ─── Shared browser args (no chromium.args — it returns undefined at runtime) ──
+// ─── Shared browser args ──────────────────────────────────────────────────────
 const CHROMIUM_ARGS = [
   "--no-sandbox",
   "--disable-setuid-sandbox",
   "--disable-dev-shm-usage",
   "--disable-gpu",
   "--no-first-run",
-  "--no-zygote",
-  "--single-process",
+  "--disable-extensions",
+  "--disable-background-networking",
   "--disable-blink-features=AutomationControlled",
 ];
 
