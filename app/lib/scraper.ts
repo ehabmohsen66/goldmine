@@ -3,7 +3,7 @@
  * Falls back to a lightweight fetch-based scrape if chromium isn't available (local dev).
  */
 
-const PRODUCT_URL = "https://mngm.com/buy/metals/fractional/8";
+const PRODUCT_URL = "https://mngm.com/buy/metals/product/8";
 const CHECKOUT_URL = "https://mngm.com/account/checkout/digital";
 const LOGIN_URL = "https://mngm.com/account/login";
 
@@ -44,6 +44,23 @@ export async function getGoldPrice(): Promise<number> {
 
   try {
     const page = await browser.newPage();
+    
+    // Login
+    await page.goto(LOGIN_URL, { waitUntil: "networkidle", timeout: 30000 });
+    await page.waitForTimeout(2000);
+
+    for (const sel of ['input[name="email"]', 'input[type="email"]', 'input[placeholder*="mail" i]']) {
+      try { if (await page.$(sel)) { await page.fill(sel, MNGM_EMAIL); break; } } catch { continue; }
+    }
+    for (const sel of ['input[name="password"]', 'input[type="password"]']) {
+      try { if (await page.$(sel)) { await page.fill(sel, MNGM_PASSWORD); break; } } catch { continue; }
+    }
+    for (const sel of ['button[type="submit"]', 'button:has-text("Sign in")', 'button:has-text("Login")']) {
+      try { if (await page.$(sel)) { await page.click(sel); break; } } catch { continue; }
+    }
+    await page.waitForTimeout(4000);
+
+    // Product
     await page.goto(PRODUCT_URL, { waitUntil: "networkidle", timeout: 30000 });
     await page.waitForTimeout(2000);
 
