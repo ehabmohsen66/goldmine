@@ -184,29 +184,33 @@ export async function executeBuy(egpAmount: number): Promise<boolean> {
     });
     await page.waitForTimeout(2000);
 
-    // ── Step 2: Fill EGP amount — trigger React synthetic events ─────────────
-    await page.evaluate((amount: number) => {
-      const input = document.querySelector<HTMLInputElement>(
-        'input[type="text"], input[type="number"], input[placeholder*="EGP"], input[placeholder*="amount"]'
-      );
-      if (!input) return;
-      // React 16+: use the native value setter to trigger synthetic events
-      const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-      if (nativeSetter) nativeSetter.call(input, amount.toString());
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      input.dispatchEvent(new Event("change", { bubbles: true }));
-    }, Math.floor(egpAmount));
-    await page.waitForTimeout(3000); // let React re-render + enable Checkout
+    // ── Step 2: Fill EGP amount — simulate real human typing + blur ──────────
+    const inputSelector = 'input[type="text"], input[type="number"], input[placeholder*="EGP"], input[placeholder*="amount"]';
+    const amountInput = page.locator(inputSelector).nth(0);
+    
+    if (await amountInput.count() > 0) {
+      // 1. Clear input
+      await amountInput.click({ clickCount: 3 });
+      await page.keyboard.press('Backspace');
+      await page.waitForTimeout(200);
+
+      // 2. Type like a human (fires keydown, keypress, input, keyup sequentially)
+      await amountInput.pressSequentially(String(Math.floor(egpAmount)), { delay: 100 });
+      
+      // 3. Trigger onBlur by clicking outside (forces React state flush)
+      await amountInput.blur();
+      await page.mouse.click(10, 10); // click top-left corner harmlessly
+    }
+    
+    // Wait for React to recalculate grams and enable the button
+    await page.waitForTimeout(3000); 
 
     // ── Step 3: Find and click the Checkout button ────────────────────────────
-    // The button element (not the span inside it) needs to be clicked
-    const checkoutBtn = await page.$(
-      'button:has-text("Checkout"), a:has-text("Checkout"), [id*="checkout"]:not([disabled])'
-    );
-    if (checkoutBtn) {
-      await checkoutBtn.click();
+    const checkoutBtn = page.locator('button:has-text("Checkout"), a:has-text("Checkout"), [id*="checkout"]:not([disabled])').nth(0);
+    if (await checkoutBtn.count() > 0) {
+      await checkoutBtn.click({ force: true });
     } else {
-      await page.click('text=Checkout', { force: true }); // force even if technically disabled
+      await page.click('text=Checkout', { force: true }); 
     }
     await page.waitForTimeout(4000);
 
