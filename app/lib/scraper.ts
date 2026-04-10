@@ -148,30 +148,48 @@ export async function loginAndGetWallet(): Promise<number | null> {
 export async function executeBuy(egpAmount: number): Promise<boolean> {
   const { browser, page } = await launchAndLogin();
   try {
-    await page.goto(PRODUCT_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
-    await page.waitForTimeout(3000);
+    // ── Step 1: Navigate to fractional buy page ───────────────────────────────
+    await page.goto("https://mngm.com/buy/metals/fractional/8", {
+      waitUntil: "domcontentloaded",
+      timeout: 30000,
+    });
+    await page.waitForTimeout(2000);
 
-    for (const sel of ['label:has-text("EGP")', 'input[value="egp"]', "#egp"]) {
-      try { const el = await page.$(sel); if (el) { await el.click(); await page.waitForTimeout(500); break; } } catch { continue; }
+    // ── Step 2: EGP mode is already selected by default; just clear & type amount
+    const amountInput = await page.$('input[type="text"], input[type="number"]');
+    if (amountInput) {
+      await amountInput.click({ clickCount: 3 });
+      await amountInput.type(String(Math.floor(egpAmount)), { delay: 80 });
     }
+    await page.waitForTimeout(1000);
 
-    for (const sel of ['input[type="number"]', ".amount-input", 'input[placeholder="0"]']) {
+    // ── Step 3: Click Checkout ────────────────────────────────────────────────
+    await page.click('text=Checkout');
+    await page.waitForTimeout(4000);
+
+    // ── Step 4: On checkout/digital — click "Wallet" card ────────────────────
+    // The card shows "Wallet / Pay with your Mngm Wallet"
+    for (const sel of [
+      ':has-text("Pay with your Mngm Wallet")',
+      ':has-text("Mngm Wallet")',
+      'text=Wallet',
+    ]) {
       try {
         const el = await page.$(sel);
-        if (el) { await el.click({ clickCount: 3 }); await el.type(String(Math.floor(egpAmount))); await page.waitForTimeout(1000); break; }
+        if (el) { await el.click(); await page.waitForTimeout(2000); break; }
       } catch { continue; }
     }
 
-    for (const sel of ['button:has-text("Checkout")', ".checkout-btn"]) {
-      try { const el = await page.$(sel); if (el) { await el.click(); await page.waitForTimeout(3000); break; } } catch { continue; }
-    }
-
-    for (const sel of [':has-text("Mngm Wallet")', "text=Wallet", '[class*="wallet"]']) {
-      try { const el = await page.$(sel); if (el) { await el.click(); await page.waitForTimeout(2000); break; } } catch { continue; }
-    }
-
-    for (const sel of ['button:has-text("Confirm")', 'button:has-text("Place Order")', 'button:has-text("Pay")']) {
-      try { const el = await page.$(sel); if (el) { await el.click(); await page.waitForTimeout(5000); break; } } catch { continue; }
+    // ── Step 5: Click the "Wallet" icon/button to confirm payment ─────────────
+    for (const sel of [
+      '.payment-icon',
+      'img[alt*="wallet" i]',
+      ':has-text("Wallet"):visible',
+    ]) {
+      try {
+        const el = await page.$(sel);
+        if (el) { await el.click(); await page.waitForTimeout(5000); break; }
+      } catch { continue; }
     }
 
     return true;
