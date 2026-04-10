@@ -50,9 +50,13 @@ export async function GET(request: Request) {
     state.status = "running";
     state.last_error = null;
 
-    // ── 1b. Get initial wallet balance if missing ────────────────────────────
-    if (state.wallet_balance === null && !state.in_position) {
-      state.wallet_balance = (await loginAndGetWallet()) ?? 0;
+    // ── 1b. Refresh wallet balance every 10 minutes ──────────────────────────
+    const lastWalletFetch = await r.get<string>("goldmine:last_wallet_fetch");
+    const walletAge = lastWalletFetch ? now - parseInt(lastWalletFetch) : Infinity;
+    if (state.wallet_balance === null || walletAge > 10 * 60 * 1000) {
+      const w = await loginAndGetWallet();
+      if (w !== null) state.wallet_balance = w;
+      await r.set("goldmine:last_wallet_fetch", String(now));
     }
 
     await appendPrice(price);
