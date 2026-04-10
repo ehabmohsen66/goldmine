@@ -2,7 +2,7 @@
 
   "functions": {
     "app/api/cron/tick/route.ts": {
-      "maxDuration": 300
+      "maxDuration": 60
     }
   }
 }
