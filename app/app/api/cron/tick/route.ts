@@ -60,7 +60,7 @@ export async function GET(request: Request) {
     // ── 2. IN POSITION — check sell trigger ──────────────────────────────────
     if (state.in_position && state.buy_price !== null && state.grams_held !== null) {
       const history = await getPriceHistory(120);
-      const signal = analyzeMarket([...history, { t: now, p: price }]);
+      const signal = analyzeMarket([...(history ?? []), { t: now, p: price }]);
       
       const changePct = ((price - state.buy_price) / state.buy_price) * 100;
 
@@ -120,7 +120,7 @@ export async function GET(request: Request) {
       }
 
       const history = await getPriceHistory(120);
-      const signal = analyzeMarket([...history, { t: now, p: price }]);
+      const signal = analyzeMarket([...(history ?? []), { t: now, p: price }]);
 
       const dipPct = ((state.peak_price - price) / state.peak_price) * 100;
 

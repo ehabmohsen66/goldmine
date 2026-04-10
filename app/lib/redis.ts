@@ -117,8 +117,8 @@ export async function appendPrice(price: number): Promise<void> {
 
 export async function getPriceHistory(limit = 120): Promise<PricePoint[]> {
   const r = getRedis();
-  const raw = await r.lrange(KEYS.PRICE_HISTORY, 0, limit - 1);
+  const raw = (await r.lrange(KEYS.PRICE_HISTORY, 0, limit - 1)) ?? [];
   return raw
     .map((item) => (typeof item === "string" ? JSON.parse(item) : item))
-    .reverse(); // oldest first for charts
+    .reverse();
 }
