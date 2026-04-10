@@ -108,21 +108,29 @@ async function launchAndLogin() {
 // PUBLIC EXPORTS
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Scrape price WITHOUT login — the product page is publicly accessible */
+/** Get live gold price — tries fast WebSocket feed first, falls back to browser */
 export async function getGoldPrice(): Promise<number> {
+  // ── Fast path: SignalR WebSocket (~200ms) ─────────────────────────────────
+  try {
+    const { getPriceFromFeed } = await import("./feed");
+    const feedPrice = await getPriceFromFeed(8000);
+    if (feedPrice && feedPrice > 1000) return feedPrice; // sanity check: EGP gold > 1000
+  } catch { /* fall through to browser */ }
+
+  // ── Slow path: browser scrape (~15s) ─────────────────────────────────────
   const browser = await launchBrowser();
   try {
     const page = await browser.newPage();
     await optimizePage(page);
 
     await page.goto(PRODUCT_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
-    await page.waitForTimeout(4000); // let websocket populate price
+    await page.waitForTimeout(4000);
 
     const content = await page.innerText("body");
     const match =
-      content.match(/Ask[\s:]*([0-9][0-9,]+\.?[0-9]*)/i) ||
-      content.match(/([0-9][0-9,]+\.[0-9]+)\s*EGP/i) ||
-      content.match(/([0-9][0-9,]+)\s*EGP/i);
+      content.match(/Ask[\s:]*([\d,]+\.?\d*)/i) ||
+      content.match(/([\d,]+\.\d+)\s*EGP/i) ||
+      content.match(/([\d,]+)\s*EGP/i);
 
     if (!match) throw new Error("Could not find price on mngm.com page");
     return parseFloat(match[1].replace(/,/g, ""));
@@ -130,6 +138,7 @@ export async function getGoldPrice(): Promise<number> {
     await browser.close();
   }
 }
+
 
 /** Get wallet balance and position data from /account/my-mngm — requires login */
 export async function loginAndGetWallet(): Promise<number | null> {
