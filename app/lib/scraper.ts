@@ -184,20 +184,32 @@ export async function executeBuy(egpAmount: number): Promise<boolean> {
     });
     await page.waitForTimeout(2000);
 
-    // ── Step 2: Fill EGP amount using React-compatible method ────────────────
-    const amountInput = await page.$('input[type="text"], input[type="number"]');
-    if (amountInput) {
-      await amountInput.click({ clickCount: 3 });
-      await amountInput.fill(String(Math.floor(egpAmount)));        // React-compatible fill
-      await amountInput.dispatchEvent("input");                     // trigger React onChange
-      await amountInput.dispatchEvent("change");
-    }
-    await page.waitForTimeout(2000); // wait for React to re-render and enable Checkout
+    // ── Step 2: Fill EGP amount — trigger React synthetic events ─────────────
+    await page.evaluate((amount: number) => {
+      const input = document.querySelector<HTMLInputElement>(
+        'input[type="text"], input[type="number"], input[placeholder*="EGP"], input[placeholder*="amount"]'
+      );
+      if (!input) return;
+      // React 16+: use the native value setter to trigger synthetic events
+      const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      if (nativeSetter) nativeSetter.call(input, amount.toString());
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    }, Math.floor(egpAmount));
+    await page.waitForTimeout(3000); // let React re-render + enable Checkout
 
-    // ── Step 3: Wait for Checkout to be enabled then click ────────────────────
-    await page.waitForSelector('text=Checkout:not([disabled])', { timeout: 15000 }).catch(() => {});
-    await page.click('text=Checkout');
+    // ── Step 3: Find and click the Checkout button ────────────────────────────
+    // The button element (not the span inside it) needs to be clicked
+    const checkoutBtn = await page.$(
+      'button:has-text("Checkout"), a:has-text("Checkout"), [id*="checkout"]:not([disabled])'
+    );
+    if (checkoutBtn) {
+      await checkoutBtn.click();
+    } else {
+      await page.click('text=Checkout', { force: true }); // force even if technically disabled
+    }
     await page.waitForTimeout(4000);
+
 
     // ── Step 4: On checkout/digital — click "Wallet" card ────────────────────
     // The card shows "Wallet / Pay with your Mngm Wallet"
