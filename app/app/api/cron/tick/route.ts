@@ -49,6 +49,11 @@ export async function GET(request: Request) {
     state.status = "running";
     state.last_error = null;
 
+    // ── 1b. Get initial wallet balance if missing ────────────────────────────
+    if (state.wallet_balance === null && !state.in_position) {
+      state.wallet_balance = (await loginAndGetWallet()) ?? 0;
+    }
+
     await appendPrice(price);
 
     // ── 2. IN POSITION — check sell trigger ──────────────────────────────────
