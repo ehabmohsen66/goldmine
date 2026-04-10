@@ -85,7 +85,7 @@ export async function saveState(state: BotState): Promise<void> {
 
 export async function isBotEnabled(): Promise<boolean> {
   const val = await getRedis().get<string>(KEYS.BOT_ENABLED);
-  return val === "true";
+  return val === "true" || val === true;
 }
 
 export async function setBotEnabled(enabled: boolean): Promise<void> {
