@@ -58,16 +58,16 @@ export async function getGoldPrice(): Promise<number> {
     await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(2000);
 
-    for (const sel of ['input[name="email"]', 'input[type="email"]', 'input[placeholder*="mail" i]']) {
+    for (const sel of ['input#si-email', 'input[name="email"]', 'input[type="email"]']) {
       try { if (await page.$(sel)) { await page.fill(sel, MNGM_EMAIL); break; } } catch { continue; }
     }
-    for (const sel of ['input[name="password"]', 'input[type="password"]']) {
+    for (const sel of ['input#js-password', 'input[name="password"]', 'input[type="password"]']) {
       try { if (await page.$(sel)) { await page.fill(sel, MNGM_PASSWORD); break; } } catch { continue; }
     }
-    for (const sel of ['button[type="submit"]', 'button:has-text("Sign in")', 'button:has-text("Login")']) {
+    for (const sel of ['button#js-loginButton', 'button[type="submit"]']) {
       try { if (await page.$(sel)) { await page.click(sel); break; } } catch { continue; }
     }
-    await page.waitForTimeout(4000);
+    await page.waitForTimeout(8000);
 
     // Product
     await page.goto(PRODUCT_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
@@ -108,16 +108,16 @@ export async function loginAndGetWallet(): Promise<number | null> {
     await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(2000);
 
-    for (const sel of ['input[name="email"]', 'input[type="email"]', 'input[placeholder*="mail" i]']) {
+    for (const sel of ['input#si-email', 'input[name="email"]', 'input[type="email"]']) {
       try { if (await page.$(sel)) { await page.fill(sel, MNGM_EMAIL); break; } } catch { continue; }
     }
-    for (const sel of ['input[name="password"]', 'input[type="password"]']) {
+    for (const sel of ['input#js-password', 'input[name="password"]', 'input[type="password"]']) {
       try { if (await page.$(sel)) { await page.fill(sel, MNGM_PASSWORD); break; } } catch { continue; }
     }
-    for (const sel of ['button[type="submit"]', 'button:has-text("Sign in")', 'button:has-text("Login")']) {
+    for (const sel of ['button#js-loginButton', 'button[type="submit"]']) {
       try { if (await page.$(sel)) { await page.click(sel); break; } } catch { continue; }
     }
-    await page.waitForTimeout(4000);
+    await page.waitForTimeout(8000);
     if (page.url().toLowerCase().includes("login")) throw new Error("Login failed");
 
     // Get wallet
@@ -156,13 +156,13 @@ export async function executeBuy(egpAmount: number): Promise<boolean> {
     for (const sel of ['input[name="email"]', 'input[type="email"]']) {
       try { if (await page.$(sel)) { await page.fill(sel, MNGM_EMAIL); break; } } catch { continue; }
     }
-    for (const sel of ['input[name="password"]', 'input[type="password"]']) {
+    for (const sel of ['input#js-password', 'input[name="password"]', 'input[type="password"]']) {
       try { if (await page.$(sel)) { await page.fill(sel, MNGM_PASSWORD); break; } } catch { continue; }
     }
     for (const sel of ['button[type="submit"]', 'button:has-text("Sign in")']) {
       try { if (await page.$(sel)) { await page.click(sel); break; } } catch { continue; }
     }
-    await page.waitForTimeout(4000);
+    await page.waitForTimeout(8000);
 
     // Navigate to product
     await page.goto(PRODUCT_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
@@ -227,13 +227,13 @@ export async function executeSell(grams: number): Promise<boolean> {
     for (const sel of ['input[name="email"]', 'input[type="email"]']) {
       try { if (await page.$(sel)) { await page.fill(sel, MNGM_EMAIL); break; } } catch { continue; }
     }
-    for (const sel of ['input[name="password"]', 'input[type="password"]']) {
+    for (const sel of ['input#js-password', 'input[name="password"]', 'input[type="password"]']) {
       try { if (await page.$(sel)) { await page.fill(sel, MNGM_PASSWORD); break; } } catch { continue; }
     }
     for (const sel of ['button[type="submit"]']) {
       try { if (await page.$(sel)) { await page.click(sel); break; } } catch { continue; }
     }
-    await page.waitForTimeout(4000);
+    await page.waitForTimeout(8000);
 
     await page.goto("https://mngm.com/account", { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(2000);
