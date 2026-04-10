@@ -46,6 +46,8 @@ async function launchBrowser() {
 
   // ── Railway / persistent server: use Playwright's own installed Chromium ──
   if (process.env.RAILWAY_ENVIRONMENT || process.env.CHROMIUM_PATH) {
+    // Set the browser path to match where the build installed it
+    process.env.PLAYWRIGHT_BROWSERS_PATH = process.env.PLAYWRIGHT_BROWSERS_PATH ?? "/app/pw-browsers";
     const executablePath = process.env.CHROMIUM_PATH ?? chromium.executablePath();
     return chromium.launch({ executablePath, args: CHROMIUM_ARGS, headless: true });
   }
