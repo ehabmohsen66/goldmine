@@ -31,6 +31,9 @@ export interface BotState {
   grams_held: number | null;
   egp_invested: number | null;
   peak_price: number | null;
+  trailing_high: number | null;   // highest price seen after buying (trailing stop)
+  dca_level: number;              // 0=watching, 1=first buy, 2=second buy, 3=fully in
+  dca_reserved: number;           // EGP reserved for further DCA buys
   wallet_balance: number | null;
   total_profit: number;
   trade_count: number;
@@ -68,6 +71,9 @@ export async function getState(): Promise<BotState> {
       grams_held: null,
       egp_invested: null,
       peak_price: null,
+      trailing_high: null,
+      dca_level: 0,
+      dca_reserved: 0,
       wallet_balance: null,
       total_profit: 0,
       trade_count: 0,
