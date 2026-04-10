@@ -9,15 +9,25 @@ const LOGIN_URL = "https://mngm.com/account/login";
 const MNGM_EMAIL = process.env.MNGM_EMAIL ?? "";
 const MNGM_PASSWORD = process.env.MNGM_PASSWORD ?? "";
 
-// ─── Shared browser args ──────────────────────────────────────────────────────
+// ─── Chromium args tuned for Vercel serverless (fork() is blocked) ───────────
 const CHROMIUM_ARGS = [
   "--no-sandbox",
   "--disable-setuid-sandbox",
   "--disable-dev-shm-usage",
   "--disable-gpu",
   "--no-first-run",
+  "--no-zygote",
+  "--single-process",           // required in Vercel: fork() is blocked
   "--disable-extensions",
-  "--disable-background-networking",
+  "--disable-background-timer-throttling",
+  "--disable-backgrounding-occluded-windows",
+  "--disable-renderer-backgrounding",
+  "--disable-ipc-flooding-protection",
+  "--disable-hang-monitor",
+  "--disable-breakpad",
+  "--disable-translate",
+  "--mute-audio",
+  "--use-gl=swiftshader",
   "--disable-blink-features=AutomationControlled",
 ];
 
