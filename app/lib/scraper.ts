@@ -27,6 +27,14 @@ async function getChromium() {
   }
 }
 
+async function optimizePage(page: any) {
+  await page.route("**/*", (route: any) => {
+    const t = route.request().resourceType();
+    if (["image", "stylesheet", "font", "media"].includes(t)) route.abort().catch(() => {});
+    else route.continue().catch(() => {});
+  });
+}
+
 export async function getGoldPrice(): Promise<number> {
   const deps = await getChromium();
   if (!deps) throw new Error("Chromium not available");
@@ -44,6 +52,7 @@ export async function getGoldPrice(): Promise<number> {
 
   try {
     const page = await browser.newPage();
+    await optimizePage(page);
     
     // Login
     await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
@@ -93,6 +102,7 @@ export async function loginAndGetWallet(): Promise<number | null> {
 
   try {
     const page = await browser.newPage();
+    await optimizePage(page);
 
     // Login
     await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
@@ -138,6 +148,7 @@ export async function executeBuy(egpAmount: number): Promise<boolean> {
 
   try {
     const page = await browser.newPage();
+    await optimizePage(page);
 
     // Login first
     await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
@@ -208,6 +219,7 @@ export async function executeSell(grams: number): Promise<boolean> {
 
   try {
     const page = await browser.newPage();
+    await optimizePage(page);
 
     // Login
     await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
