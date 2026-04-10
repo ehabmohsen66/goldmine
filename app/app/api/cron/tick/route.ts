@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   getState, saveState, isBotEnabled,
-  logTrade, appendPrice, getRedis, KEYS,
+  logTrade, appendPrice, getRedis, KEYS, getPriceHistory,
   type BotState,
 } from "@/lib/redis";
 import {
@@ -11,6 +11,7 @@ import {
   emailBought, emailSold, emailAddFunds,
   emailHoldingUpdate, emailError,
 } from "@/lib/email";
+import { analyzeMarket } from "@/lib/strategy";
 
 export const runtime = "nodejs";
 export const maxDuration = 60; // 1 min max for Vercel Hobby
@@ -58,9 +59,15 @@ export async function GET(request: Request) {
 
     // ── 2. IN POSITION — check sell trigger ──────────────────────────────────
     if (state.in_position && state.buy_price !== null && state.grams_held !== null) {
+      const history = await getPriceHistory(120);
+      const signal = analyzeMarket([...history, { t: now, p: price }]);
+      
       const changePct = ((price - state.buy_price) / state.buy_price) * 100;
 
-      if (changePct >= SELL_TARGET_PCT) {
+      const isTargetHit = changePct >= SELL_TARGET_PCT;
+      const isStrongSell = signal.action === "SELL_STRONG" && changePct > 0; // ensure no loss
+
+      if (isTargetHit || isStrongSell) {
         // SELL
         await executeSell(state.grams_held);
         await new Promise((r) => setTimeout(r, 15000));
@@ -112,9 +119,15 @@ export async function GET(request: Request) {
         state.peak_price = price;
       }
 
+      const history = await getPriceHistory(120);
+      const signal = analyzeMarket([...history, { t: now, p: price }]);
+
       const dipPct = ((state.peak_price - price) / state.peak_price) * 100;
 
-      if (dipPct >= DIP_BUY_PCT) {
+      const isDipHit = dipPct >= DIP_BUY_PCT;
+      const isAlgoBuy = signal.action === "BUY_STRONG" || (signal.action === "BUY" && isDipHit);
+
+      if (isAlgoBuy || isDipHit) {
         // Get wallet balance
         const wallet = (await loginAndGetWallet()) ?? state.wallet_balance ?? 0;
         state.wallet_balance = wallet;
