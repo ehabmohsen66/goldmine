@@ -71,7 +71,7 @@ async function launchAndLogin() {
       "--no-sandbox",
     ],
     executablePath: execPath,
-    headless: chromium.headless ?? true,
+    headless: true,
   });
 
   const page = await browser.newPage();
