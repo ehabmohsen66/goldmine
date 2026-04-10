@@ -64,12 +64,19 @@ async function launchAndLogin() {
     "https://github.com/Sparticuz/chromium/releases/download/v133.0.0/chromium-v133.0.0-pack.tar"
   );
 
+  const CHROMIUM_ARGS = [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--no-first-run",
+    "--no-zygote",
+    "--single-process",
+    "--disable-blink-features=AutomationControlled",
+  ];
+
   const browser = await playwright.chromium.launch({
-    args: [
-      ...(chromium.args ?? []),
-      "--disable-blink-features=AutomationControlled",
-      "--no-sandbox",
-    ],
+    args: CHROMIUM_ARGS,
     executablePath: execPath,
     headless: true,
   });
