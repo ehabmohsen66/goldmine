@@ -16,14 +16,16 @@ import { analyzeMarket } from "@/lib/strategy";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const BASE_DIP_PCT   = parseFloat(process.env.DIP_BUY_PCT      ?? "0.5");
-const BASE_TRAIL_PCT = parseFloat(process.env.TRAIL_STOP_PCT    ?? "0.4");
+const BASE_DIP_PCT   = parseFloat(process.env.DIP_BUY_PCT        ?? "0.5");
+const BASE_TRAIL_PCT = parseFloat(process.env.TRAIL_STOP_PCT      ?? "0.4");
 const LOW_WALLET     = parseFloat(process.env.LOW_WALLET_THRESHOLD ?? "500");
+const DRY_RUN        = process.env.DRY_RUN === "true";
 
 // DCA allocation: invest in 3 tranches — 40% / 40% / 20%
 const DCA_TRANCHES = [0.4, 0.4, 0.2];
 
 const CRON_SECRET = process.env.CRON_SECRET;
+const dryTag = DRY_RUN ? "[DRY RUN] " : "";
 
 export async function GET(request: Request) {
   if (CRON_SECRET) {
@@ -89,9 +91,11 @@ export async function GET(request: Request) {
       const sellSignalStrong = signal.action === "SELL_STRONG" && changePct > 0;
 
       if (trailTriggered || sellSignalStrong) {
-        // SELL ALL
-        await executeSell(state.grams_held);
-        await new Promise(res => setTimeout(res, 12000));
+        // SELL ALL (or simulate in dry-run)
+        if (!DRY_RUN) {
+          await executeSell(state.grams_held);
+          await new Promise(res => setTimeout(res, 12000));
+        }
 
         const sellValue = state.grams_held * price;
         const profit    = sellValue - (state.egp_invested ?? sellValue);
@@ -111,8 +115,9 @@ export async function GET(request: Request) {
         state.egp_invested   = null;
 
         await saveState(state);
+        const action = DRY_RUN ? "SELL_DRY" : "SELL";
         await logTrade({ timestamp: new Date().toISOString(), action: "SELL", price, egp_amount: sellValue, grams: state.grams_held ?? 0, profit, wallet_balance: wallet });
-        await emailSold(state.buy_price ?? price, price, state.grams_held ?? 0, profit, wallet, state.trade_count, state.total_profit);
+        if (action === "SELL") await emailSold(state.buy_price ?? price, price, state.grams_held ?? 0, profit, wallet, state.trade_count, state.total_profit);
 
       } else if (changePct < -2.0) {
         const lastAlert = await r.get<string>(KEYS.LAST_HOLDING_ALERT);
@@ -159,8 +164,10 @@ export async function GET(request: Request) {
           : state.dca_reserved * investPct;
 
         if (investAmount >= LOW_WALLET) {
-          await executeBuy(investAmount);
-          await new Promise(res => setTimeout(res, 8000));
+          if (!DRY_RUN) {
+            await executeBuy(investAmount);
+            await new Promise(res => setTimeout(res, 8000));
+          }
 
           const gramsAcquired = investAmount / price;
           state.in_position   = true;
@@ -198,7 +205,7 @@ export async function GET(request: Request) {
     }
 
     await saveState(state);
-    return NextResponse.json({ ok: true, price, signal, state });
+    return NextResponse.json({ ok: true, dry_run: DRY_RUN, price, signal, state });
 
   } catch (err) {
     const errStr = String(err);
