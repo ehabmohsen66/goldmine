@@ -33,7 +33,7 @@ export async function getGoldPrice(): Promise<number> {
 
   const { chromium, playwright } = deps;
   const execPath = await chromium.executablePath(
-    "https://github.com/Sparticuz/chromium/releases/download/v143.0.0/chromium-v143.0.0-pack.tar"
+    "https://github.com/Sparticuz/chromium/releases/download/v133.0.0/chromium-v133.0.0-pack.tar"
   );
 
   const browser = await playwright.chromium.launch({
@@ -63,7 +63,7 @@ export async function loginAndGetWallet(): Promise<number | null> {
 
   const { chromium, playwright } = deps;
   const execPath = await chromium.executablePath(
-    "https://github.com/Sparticuz/chromium/releases/download/v143.0.0/chromium-v143.0.0-pack.tar"
+    "https://github.com/Sparticuz/chromium/releases/download/v133.0.0/chromium-v133.0.0-pack.tar"
   );
 
   const browser = await playwright.chromium.launch({
@@ -108,7 +108,7 @@ export async function executeBuy(egpAmount: number): Promise<boolean> {
 
   const { chromium, playwright } = deps;
   const execPath = await chromium.executablePath(
-    "https://github.com/Sparticuz/chromium/releases/download/v143.0.0/chromium-v143.0.0-pack.tar"
+    "https://github.com/Sparticuz/chromium/releases/download/v133.0.0/chromium-v133.0.0-pack.tar"
   );
 
   const browser = await playwright.chromium.launch({
@@ -178,7 +178,7 @@ export async function executeSell(grams: number): Promise<boolean> {
 
   const { chromium, playwright } = deps;
   const execPath = await chromium.executablePath(
-    "https://github.com/Sparticuz/chromium/releases/download/v143.0.0/chromium-v143.0.0-pack.tar"
+    "https://github.com/Sparticuz/chromium/releases/download/v133.0.0/chromium-v133.0.0-pack.tar"
   );
 
   const browser = await playwright.chromium.launch({
