@@ -3,7 +3,7 @@
  */
 
 const PRODUCT_URL = "https://mngm.com/buy/metals/product/8";
-const CHECKOUT_URL = "https://mngm.com/account/checkout/digital";
+const MY_MNGM_URL = "https://mngm.com/account/my-mngm";
 const LOGIN_URL = "https://mngm.com/account/login";
 
 const MNGM_EMAIL = process.env.MNGM_EMAIL ?? "";
@@ -121,18 +121,21 @@ export async function getGoldPrice(): Promise<number> {
   }
 }
 
-/** Get wallet balance — requires login */
+/** Get wallet balance and position data from /account/my-mngm — requires login */
 export async function loginAndGetWallet(): Promise<number | null> {
   try {
     const { browser, page } = await launchAndLogin();
     try {
-      await page.goto(CHECKOUT_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
+      await page.goto(MY_MNGM_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
       await page.waitForTimeout(3000);
       const content = await page.innerText("body");
-      const match =
-        content.match(/[Ww]allet[^\d]{0,40}([\d,]+\.?\d*)\s*EGP/) ||
-        content.match(/[Bb]alance[^\d]{0,40}([\d,]+\.?\d*)\s*EGP/);
-      return match ? parseFloat(match[1].replace(/,/g, "")) : null;
+
+      // Match "Cash Balance" section: "Available: 0.32"
+      const cashMatch =
+        content.match(/Cash\s*Balance[^\d]{0,60}Available[:\s]+([\d,]+\.?\d*)/i) ||
+        content.match(/Available[:\s]+([\d,]+\.?\d*)\s*(?:EGP)?/i);
+
+      return cashMatch ? parseFloat(cashMatch[1].replace(/,/g, "")) : null;
     } finally {
       await browser.close();
     }
