@@ -66,12 +66,12 @@ async function launchAndLogin() {
 
   const browser = await playwright.chromium.launch({
     args: [
-      ...chromium.args,
+      ...(chromium.args ?? []),
       "--disable-blink-features=AutomationControlled",
       "--no-sandbox",
     ],
     executablePath: execPath,
-    headless: true,
+    headless: chromium.headless ?? true,
   });
 
   const page = await browser.newPage();
