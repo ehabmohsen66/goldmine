@@ -44,17 +44,10 @@ async function getChromium() {
 async function launchBrowser() {
   const { chromium } = await import("playwright-core");
 
-  // ── Railway / persistent server: use system Chromium ──────────────────────
-  const systemChromium =
-    process.env.CHROMIUM_PATH ??  // allow manual override
-    (process.env.RAILWAY_ENVIRONMENT ? "/run/current-system/sw/bin/chromium" : null) ??
-    (process.platform !== "win32" ? (() => {
-      const { execSync } = require("child_process");
-      try { return execSync("which chromium chromium-browser google-chrome 2>/dev/null").toString().split("\n")[0].trim() || null; } catch { return null; }
-    })() : null);
-
-  if (systemChromium) {
-    return chromium.launch({ executablePath: systemChromium, args: CHROMIUM_ARGS, headless: true });
+  // ── Railway / persistent server: use Playwright's own installed Chromium ──
+  if (process.env.RAILWAY_ENVIRONMENT || process.env.CHROMIUM_PATH) {
+    const executablePath = process.env.CHROMIUM_PATH ?? chromium.executablePath();
+    return chromium.launch({ executablePath, args: CHROMIUM_ARGS, headless: true });
   }
 
   // ── Vercel / Lambda: use sparticuz chromium-min ────────────────────────────
@@ -64,6 +57,7 @@ async function launchBrowser() {
   );
   return chromium.launch({ args: CHROMIUM_ARGS, executablePath: execPath, headless: true });
 }
+
 
 
 /** Block images/styles/fonts to save RAM */
