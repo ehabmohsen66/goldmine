@@ -1,8 +1,0 @@
-{
-
-  "functions": {
-    "app/api/cron/tick/route.ts": {
-      "maxDuration": 60
-    }
-  }
-}

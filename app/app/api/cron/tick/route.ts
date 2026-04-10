@@ -13,7 +13,7 @@ import {
 } from "@/lib/email";
 
 export const runtime = "nodejs";
-export const maxDuration = 300; // 5 min max for Vercel Pro
+export const maxDuration = 60; // 1 min max for Vercel Hobby
 
 const SELL_TARGET_PCT = parseFloat(process.env.SELL_TARGET_PCT ?? "0.7");
 const DIP_BUY_PCT     = parseFloat(process.env.DIP_BUY_PCT ?? "0.5");
