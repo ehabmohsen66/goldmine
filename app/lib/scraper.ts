@@ -44,11 +44,10 @@ async function getChromium() {
 async function launchBrowser() {
   const { chromium } = await import("playwright-core");
 
-  // ── Railway / persistent server: use Playwright's own installed Chromium ──
-  if (process.env.RAILWAY_ENVIRONMENT || process.env.CHROMIUM_PATH) {
-    // Set the browser path to match where the build installed it
-    process.env.PLAYWRIGHT_BROWSERS_PATH = process.env.PLAYWRIGHT_BROWSERS_PATH ?? "/app/pw-browsers";
+  // ── Railway / persistent server: PLAYWRIGHT_BROWSERS_PATH is set → use playwright's Chromium ──
+  if (process.env.PLAYWRIGHT_BROWSERS_PATH || process.env.CHROMIUM_PATH) {
     const executablePath = process.env.CHROMIUM_PATH ?? chromium.executablePath();
+    console.log(`[scraper] Launching Chromium from: ${executablePath}`);
     return chromium.launch({ executablePath, args: CHROMIUM_ARGS, headless: true });
   }
 
