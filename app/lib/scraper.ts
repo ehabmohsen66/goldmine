@@ -46,7 +46,7 @@ export async function getGoldPrice(): Promise<number> {
     const page = await browser.newPage();
     
     // Login
-    await page.goto(LOGIN_URL, { waitUntil: "networkidle", timeout: 30000 });
+    await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(2000);
 
     for (const sel of ['input[name="email"]', 'input[type="email"]', 'input[placeholder*="mail" i]']) {
@@ -61,11 +61,13 @@ export async function getGoldPrice(): Promise<number> {
     await page.waitForTimeout(4000);
 
     // Product
-    await page.goto(PRODUCT_URL, { waitUntil: "networkidle", timeout: 30000 });
+    await page.goto(PRODUCT_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(2000);
 
+    // Wait for websocket to populate price
+    await page.waitForTimeout(3000);
     const content = await page.innerText("body");
-    const match = content.match(/\(?(\d[\d,]+\.?\d*)\s*EGP\s*\/\s*gram\)?/);
+    const match = content.match(/Ask\s*([\d,.]+)/i) || content.match(/([\d,.]+)\s*EGP/i);
     if (!match) throw new Error("Could not find price on mngm.com page");
 
     return parseFloat(match[1].replace(/,/g, ""));
@@ -93,7 +95,7 @@ export async function loginAndGetWallet(): Promise<number | null> {
     const page = await browser.newPage();
 
     // Login
-    await page.goto(LOGIN_URL, { waitUntil: "networkidle", timeout: 30000 });
+    await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(2000);
 
     for (const sel of ['input[name="email"]', 'input[type="email"]', 'input[placeholder*="mail" i]']) {
@@ -109,7 +111,7 @@ export async function loginAndGetWallet(): Promise<number | null> {
     if (page.url().toLowerCase().includes("login")) throw new Error("Login failed");
 
     // Get wallet
-    await page.goto(CHECKOUT_URL, { waitUntil: "networkidle", timeout: 30000 });
+    await page.goto(CHECKOUT_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(2000);
     const content = await page.innerText("body");
     const match = content.match(/[Ww]allet[^\d]{0,30}([\d,]+\.?\d*)\s*EGP/);
@@ -138,7 +140,7 @@ export async function executeBuy(egpAmount: number): Promise<boolean> {
     const page = await browser.newPage();
 
     // Login first
-    await page.goto(LOGIN_URL, { waitUntil: "networkidle", timeout: 30000 });
+    await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(2000);
     for (const sel of ['input[name="email"]', 'input[type="email"]']) {
       try { if (await page.$(sel)) { await page.fill(sel, MNGM_EMAIL); break; } } catch { continue; }
@@ -152,7 +154,7 @@ export async function executeBuy(egpAmount: number): Promise<boolean> {
     await page.waitForTimeout(4000);
 
     // Navigate to product
-    await page.goto(PRODUCT_URL, { waitUntil: "networkidle", timeout: 30000 });
+    await page.goto(PRODUCT_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(2000);
 
     // Select EGP input mode
@@ -208,7 +210,7 @@ export async function executeSell(grams: number): Promise<boolean> {
     const page = await browser.newPage();
 
     // Login
-    await page.goto(LOGIN_URL, { waitUntil: "networkidle", timeout: 30000 });
+    await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(2000);
     for (const sel of ['input[name="email"]', 'input[type="email"]']) {
       try { if (await page.$(sel)) { await page.fill(sel, MNGM_EMAIL); break; } } catch { continue; }
@@ -221,7 +223,7 @@ export async function executeSell(grams: number): Promise<boolean> {
     }
     await page.waitForTimeout(4000);
 
-    await page.goto("https://mngm.com/account", { waitUntil: "networkidle", timeout: 30000 });
+    await page.goto("https://mngm.com/account", { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(2000);
 
     for (const sel of ['a:has-text("Sell")', 'button:has-text("Sell")', '[href*="sell"]']) {
