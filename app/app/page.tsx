@@ -318,7 +318,7 @@ export default function DashboardPage() {
       <div style={{ marginTop: 24, textAlign: "center" }}>
         <p style={{ fontSize: 11, color: "var(--text-muted)" }}>
           <Zap size={10} style={{ display: "inline", marginRight: 4 }} />
-          Goldmine runs on Vercel Cron · checks price every 60s · powered by mngm.com
+          Goldmine runs on Railway · checks price every 60s · powered by mngm.com
         </p>
       </div>
 
