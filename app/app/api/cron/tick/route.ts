@@ -4,14 +4,15 @@ import {
   logTrade, appendPrice, getRedis, KEYS, getPriceHistory,
   type BotState,
 } from "@/lib/redis";
-import {
-  getGoldPrice, loginAndGetWallet, executeBuy, executeSell,
-} from "@/lib/scraper";
+import { getGoldPrice, loginAndGetWallet } from "@/lib/scraper";
 import {
   emailBought, emailSold, emailAddFunds,
   emailHoldingUpdate, emailError,
 } from "@/lib/email";
 import { analyzeMarket } from "@/lib/strategy";
+import {
+  telegramBuySignal, telegramSellSignal, telegramHoldAlert, telegramError,
+} from "@/lib/telegram";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -82,42 +83,22 @@ export async function GET(request: Request) {
         state.trailing_high = price;
       }
 
-      const changePct   = ((price - state.buy_price) / state.buy_price) * 100;
+      const changePct    = ((price - state.buy_price) / state.buy_price) * 100;
       const trailDropPct = state.trailing_high > 0
         ? ((state.trailing_high - price) / state.trailing_high) * 100
         : 0;
 
-      const trailTriggered  = trailDropPct >= adaptiveTrailPct && changePct > 0; // must be profitable
+      const trailTriggered   = trailDropPct >= adaptiveTrailPct && changePct > 0;
       const sellSignalStrong = signal.action === "SELL_STRONG" && changePct > 0;
 
       if (trailTriggered || sellSignalStrong) {
-        // SELL ALL (or simulate in dry-run)
-        if (!DRY_RUN) {
-          await executeSell(state.grams_held);
-          await new Promise(res => setTimeout(res, 12000));
-        }
+        const unrealizedProfit = (price - state.buy_price) * (state.grams_held ?? 0);
 
-        const sellValue = state.grams_held * price;
-        const profit    = sellValue - (state.egp_invested ?? sellValue);
-
-        state.total_profit  += profit;
-        state.trade_count   += 1;
-        state.in_position    = false;
-        state.peak_price     = price;
-        state.trailing_high  = null;
-        state.dca_level      = 0;
-        state.dca_reserved   = 0;
-
-        const wallet = (await loginAndGetWallet()) ?? sellValue;
-        state.wallet_balance = wallet;
-        state.buy_price      = null;
-        state.grams_held     = null;
-        state.egp_invested   = null;
-
-        await saveState(state);
-        const action = DRY_RUN ? "SELL_DRY" : "SELL";
-        await logTrade({ timestamp: new Date().toISOString(), action: "SELL", price, egp_amount: sellValue, grams: state.grams_held ?? 0, profit, wallet_balance: wallet });
-        if (action === "SELL") await emailSold(state.buy_price ?? price, price, state.grams_held ?? 0, profit, wallet, state.trade_count, state.total_profit);
+        // 🔴 Send Telegram sell signal — user executes manually on MNGM
+        await telegramSellSignal(state.buy_price, price, state.grams_held ?? 0, unrealizedProfit);
+        await emailSold(state.buy_price, price, state.grams_held ?? 0, unrealizedProfit, state.wallet_balance ?? 0, state.trade_count ?? 0, state.total_profit ?? 0);
+        console.log(`${dryTag}SELL SIGNAL sent — price: ${price}, unrealized: ${unrealizedProfit.toFixed(2)} EGP`);
+        // State updated by user via POST /api/bot/confirm { action:"sell", ... }
 
       } else if (changePct < -2.0) {
         const lastAlert = await r.get<string>(KEYS.LAST_HOLDING_ALERT);
@@ -147,13 +128,12 @@ export async function GET(request: Request) {
       const shouldBuy = level1Hit || level2Hit || level3Hit || rsiOverride;
 
       if (shouldBuy) {
-        const wallet = (await loginAndGetWallet()) ?? state.wallet_balance ?? 0;
-        state.wallet_balance = wallet;
+        const wallet = state.wallet_balance ?? 0;
 
         // Determine how much to invest in this tranche
         let investPct: number;
         if (state.dca_level === 0) {
-          investPct = rsiOverride ? 0.8 : DCA_TRANCHES[0]; // RSI override = 80% immediately
+          investPct = rsiOverride ? 0.8 : DCA_TRANCHES[0];
         } else {
           investPct = DCA_TRANCHES[Math.min(state.dca_level, DCA_TRANCHES.length - 1)];
         }
@@ -164,35 +144,13 @@ export async function GET(request: Request) {
           : state.dca_reserved * investPct;
 
         if (investAmount >= LOW_WALLET) {
-          if (!DRY_RUN) {
-            await executeBuy(investAmount);
-            await new Promise(res => setTimeout(res, 8000));
-          }
+          // 🟢 Send Telegram buy signal — user executes manually
+          await telegramBuySignal(price, investAmount, dipPct, wallet);
+          await emailBought(price, investAmount / price, investAmount, (state.trade_count ?? 0) + 1);
+          console.log(`${dryTag}BUY SIGNAL sent — price: ${price}, amount: ${investAmount.toFixed(2)} EGP`);
 
-          const gramsAcquired = investAmount / price;
-          state.in_position   = true;
-          state.buy_price     = state.buy_price
-            // Weighted average buy price across DCA levels
-            ? (state.buy_price * (state.grams_held ?? 0) + price * gramsAcquired) / ((state.grams_held ?? 0) + gramsAcquired)
-            : price;
-          state.buy_time      = state.buy_time ?? new Date().toISOString();
-          state.grams_held    = (state.grams_held ?? 0) + gramsAcquired;
-          state.egp_invested  = (state.egp_invested ?? 0) + investAmount;
-          state.trailing_high = price;
-          state.peak_price    = price;
-
-          // Reserve the rest for deeper dip tranches
-          if (state.dca_level === 0) {
-            state.dca_reserved = totalBudget - investAmount;
-          } else {
-            state.dca_reserved = state.dca_reserved - (state.dca_reserved * investPct);
-          }
-          state.dca_level    += 1;
-          state.wallet_balance = Math.max(0, wallet - investAmount);
-
-          await saveState(state);
-          await logTrade({ timestamp: new Date().toISOString(), action: "BUY", price, egp_amount: investAmount, grams: gramsAcquired, profit: 0, wallet_balance: state.wallet_balance });
-          await emailBought(price, gramsAcquired, investAmount, state.trade_count + 1);
+          // Save pending signal so /confirm_buy can update state
+          await r.set("goldmine:pending_buy", JSON.stringify({ price, investAmount, investPct, dipPct, rsiOverride, dca_level: state.dca_level }));
 
         } else {
           const lastAlert = await r.get<string>(KEYS.LAST_ADD_FUNDS_ALERT);
