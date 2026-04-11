@@ -4,9 +4,11 @@
  */
 
 export async function register() {
-  // Only run in the Node.js runtime (not edge), and only on Railway
+  // Only run server-side (not edge runtime)
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
-  if (!process.env.RAILWAY_ENVIRONMENT && !process.env.SELF_TICK) return;
+  // Only run on Railway (detected by PLAYWRIGHT_BROWSERS_PATH or SELF_TICK)
+  const isServer = process.env.PLAYWRIGHT_BROWSERS_PATH || process.env.SELF_TICK || process.env.TELEGRAM_BOT_TOKEN;
+  if (!isServer) return;
 
   const INTERVAL_MS = parseInt(process.env.TICK_INTERVAL_MS ?? "60000");
   const PORT = process.env.PORT ?? "3000";
