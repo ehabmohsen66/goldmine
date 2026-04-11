@@ -90,6 +90,10 @@ export default function DashboardPage() {
     ? ((state.last_price - state.buy_price) / state.buy_price) * 100
     : null;
 
+  const unrealizedEgp = state?.in_position && state.buy_price && state.last_price && state.grams_held
+    ? (state.last_price - state.buy_price) * state.grams_held
+    : null;
+
   const isRunning = state?.status === "running" && state?.bot_enabled;
   const isError   = state?.status === "error";
 
@@ -258,6 +262,11 @@ export default function DashboardPage() {
           {loading ? <div className="skeleton" style={{ width: 110, height: 32 }} /> : (
             <p className="stat-value" style={{ color: pnlPct === null ? "var(--text-muted)" : pnlPct >= 0 ? "var(--green)" : "var(--red)" }}>
               {pnlPct !== null ? `${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(2)}%` : "—"}
+            </p>
+          )}
+          {unrealizedEgp !== null && (
+            <p style={{ fontSize: 13, fontWeight: 600, marginTop: 4, color: unrealizedEgp >= 0 ? "var(--green)" : "var(--red)" }}>
+              {unrealizedEgp >= 0 ? "+" : ""}{fmt(unrealizedEgp)} EGP
             </p>
           )}
           {state?.in_position && state?.buy_price && (
