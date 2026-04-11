@@ -150,8 +150,14 @@ export async function getGoldPrice(): Promise<number> {
 }
 
 
-/** Get wallet balance and position data from /account/my-mngm — requires login */
+/** Get wallet balance only */
 export async function loginAndGetWallet(): Promise<number | null> {
+  const portfolio = await loginAndGetPortfolio();
+  return portfolio?.wallet ?? null;
+}
+
+/** Get full portfolio: wallet balance + gold grams held from MNGM account page */
+export async function loginAndGetPortfolio(): Promise<{ wallet: number; grams: number } | null> {
   try {
     const { browser, page } = await launchAndLogin();
     try {
@@ -159,19 +165,29 @@ export async function loginAndGetWallet(): Promise<number | null> {
       await page.waitForTimeout(3000);
       const content = await page.innerText("body");
 
-      // Match "Cash Balance" section: "Available: 0.32"
+      // Wallet / cash balance
       const cashMatch =
         content.match(/Cash\s*Balance[^\d]{0,60}Available[:\s]+([\d,]+\.?\d*)/i) ||
         content.match(/Available[:\s]+([\d,]+\.?\d*)\s*(?:EGP)?/i);
+      const wallet = cashMatch ? parseFloat(cashMatch[1].replace(/,/g, "")) : 0;
 
-      return cashMatch ? parseFloat(cashMatch[1].replace(/,/g, "")) : null;
+      // Gold grams held — look for patterns like "0.006 Grams" or "Grams\n0.006"
+      const gramsMatch =
+        content.match(/([\d]+\.[\d]+)\s*[Gg]ram/i) ||
+        content.match(/[Gg]ram[s]?\s*[:\s]*([\d]+\.[\d]+)/i);
+      const grams = gramsMatch ? parseFloat(gramsMatch[1]) : 0;
+
+      console.log(`[scraper] Portfolio sync — wallet: ${wallet} EGP, grams: ${grams}g`);
+      return { wallet, grams };
     } finally {
       await browser.close();
     }
-  } catch {
+  } catch (err) {
+    console.error("[scraper] Portfolio sync failed:", err);
     return null;
   }
 }
+
 
 /** Buy fractional gold — requires login */
 export async function executeBuy(egpAmount: number): Promise<boolean> {

@@ -4,7 +4,7 @@ import {
   logTrade, appendPrice, getRedis, KEYS, getPriceHistory,
   type BotState,
 } from "@/lib/redis";
-import { getGoldPrice, loginAndGetWallet } from "@/lib/scraper";
+import { getGoldPrice, loginAndGetPortfolio } from "@/lib/scraper";
 import {
   emailBought, emailSold, emailAddFunds,
   emailHoldingUpdate, emailError,
@@ -57,12 +57,31 @@ export async function GET(request: Request) {
     state.last_error = null;
     await appendPrice(price);
 
-    // ── 2. Refresh wallet every 10 min ────────────────────────────────────────
+    // ── 2. Auto-sync portfolio from MNGM every 10 min ────────────────────────
     const lastWalletFetch = await r.get<string>("goldmine:last_wallet_fetch");
     const walletAge = lastWalletFetch ? now - parseInt(lastWalletFetch) : Infinity;
     if (state.wallet_balance === null || walletAge > 10 * 60 * 1000) {
-      const w = await loginAndGetWallet();
-      if (w !== null) state.wallet_balance = w;
+      const portfolio = await loginAndGetPortfolio();
+      if (portfolio !== null) {
+        state.wallet_balance = portfolio.wallet;
+        // If grams changed on MNGM (user bought/sold manually), update state
+        if (portfolio.grams > 0 && !state.in_position) {
+          // User bought manually — bot didn't know, now it does
+          state.in_position = true;
+          state.grams_held  = portfolio.grams;
+          state.peak_price  = state.peak_price ?? price;
+          state.trailing_high = state.trailing_high ?? price;
+          console.log(`[tick] Auto-detected manual buy: ${portfolio.grams}g`);
+        } else if (portfolio.grams === 0 && state.in_position) {
+          // User sold manually — reset position
+          state.in_position = false;
+          state.grams_held  = null;
+          state.buy_price   = null;
+          console.log(`[tick] Auto-detected manual sell`);
+        } else if (portfolio.grams > 0) {
+          state.grams_held = portfolio.grams;
+        }
+      }
       await r.set("goldmine:last_wallet_fetch", String(now));
     }
 
