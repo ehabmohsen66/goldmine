@@ -184,35 +184,41 @@ export async function executeBuy(egpAmount: number): Promise<boolean> {
     });
     await page.waitForTimeout(2000);
 
-    // ── Step 2: Fill EGP amount — simulate real human typing + blur ──────────
-    const inputSelector = 'input[type="text"], input[type="number"], input[placeholder*="EGP"], input[placeholder*="amount"]';
-    const amountInput = page.locator(inputSelector).nth(0);
-    
+    // ── Step 2: Switch to EGP mode (page defaults to Grams) ──────────────────
+    // Click the EGP radio/tab to switch the input from grams to EGP
+    for (const sel of [
+      'label:has-text("EGP")',
+      'input[value="EGP"]',
+      'button:has-text("EGP")',
+      '[id*="egp"]',
+    ]) {
+      try {
+        const el = await page.$(sel);
+        if (el) { await el.click(); await page.waitForTimeout(800); break; }
+      } catch { continue; }
+    }
+
+    // ── Step 3: Fill #js-amount with the EGP value ────────────────────────────
+    const amountInput = page.locator('#js-amount').nth(0);
     if (await amountInput.count() > 0) {
-      // 1. Clear input
       await amountInput.click({ clickCount: 3 });
       await page.keyboard.press('Backspace');
       await page.waitForTimeout(200);
-
-      // 2. Type like a human (fires keydown, keypress, input, keyup sequentially)
-      await amountInput.pressSequentially(String(Math.floor(egpAmount)), { delay: 100 });
-      
-      // 3. Trigger onBlur by clicking outside (forces React state flush)
-      await amountInput.blur();
-      await page.mouse.click(10, 10); // click top-left corner harmlessly
+      await amountInput.pressSequentially(String(Math.floor(egpAmount)), { delay: 80 });
+      // Blur to trigger React recalculation and enable #js-checkoutBtn
+      await page.mouse.click(500, 400);
+      await page.waitForTimeout(2500);
     }
-    
-    // Wait for React to recalculate grams and enable the button
-    await page.waitForTimeout(3000); 
 
-    // ── Step 3: Find and click the Checkout button ────────────────────────────
-    const checkoutBtn = page.locator('button:has-text("Checkout"), a:has-text("Checkout"), [id*="checkout"]:not([disabled])').nth(0);
+    // ── Step 4: Click #js-checkoutBtn ────────────────────────────────────────
+    const checkoutBtn = page.locator('#js-checkoutBtn').nth(0);
     if (await checkoutBtn.count() > 0) {
       await checkoutBtn.click({ force: true });
     } else {
-      await page.click('text=Checkout', { force: true }); 
+      await page.click('text=Checkout', { force: true });
     }
     await page.waitForTimeout(4000);
+
 
 
     // ── Step 4: On checkout/digital — click "Wallet" card ────────────────────
