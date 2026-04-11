@@ -17,6 +17,21 @@ export async function register() {
   // Wait for server to be fully ready before first tick
   await new Promise((r) => setTimeout(r, 5000));
 
+  // Send Telegram startup ping
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (token && chatId) {
+    fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: "🟡 <b>Goldmine Bot Started</b>\n\nMonitoring gold prices every 60s.\nYou will be notified here when to buy or sell on MNGM.\n\n<i>Set LOW_WALLET_THRESHOLD=20 to allow 50 EGP buys.</i>",
+        parse_mode: "HTML",
+      }),
+    }).catch(() => {});
+  }
+
   const runTick = async () => {
     try {
       const res = await fetch(TICK_URL, { signal: AbortSignal.timeout(55000) });
