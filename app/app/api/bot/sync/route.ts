@@ -22,6 +22,7 @@ export async function POST(request: Request) {
   if (body.egp_invested !== undefined) state.egp_invested = parseFloat(body.egp_invested);
   if (body.total_profit !== undefined) state.total_profit = parseFloat(body.total_profit);
   if (body.peak_price !== undefined) state.peak_price = parseFloat(body.peak_price);
+  if (body.trailing_high !== undefined) state.trailing_high = parseFloat(body.trailing_high);
   if (body.trade_count !== undefined) state.trade_count = parseInt(body.trade_count);
   if (body.dca_level !== undefined) state.dca_level = parseInt(body.dca_level);
 
