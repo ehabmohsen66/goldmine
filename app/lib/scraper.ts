@@ -249,6 +249,7 @@ export async function executeBuy(egpAmount: number): Promise<boolean> {
 /** Sell gold — requires login */
 export async function executeSell(grams: number): Promise<boolean> {
   const { browser, page } = await launchAndLogin();
+  let clickedConfirm = false;
   try {
     await page.goto("https://mngm.com/account", { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(2000);
@@ -265,7 +266,14 @@ export async function executeSell(grams: number): Promise<boolean> {
     }
 
     for (const sel of ['button:has-text("Sell")', 'button:has-text("Confirm")']) {
-      try { const el = await page.$(sel); if (el) { await el.click(); await page.waitForTimeout(5000); break; } } catch { continue; }
+      try { 
+        const el = await page.$(sel); 
+        if (el) { await el.click(); await page.waitForTimeout(5000); clickedConfirm = true; break; } 
+      } catch { continue; }
+    }
+
+    if (!clickedConfirm) {
+      throw new Error("Could not find or click the Confirm Sell button");
     }
 
     return true;
@@ -273,3 +281,4 @@ export async function executeSell(grams: number): Promise<boolean> {
     await browser.close();
   }
 }
+

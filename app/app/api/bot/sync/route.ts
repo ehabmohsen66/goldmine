@@ -20,6 +20,8 @@ export async function POST(request: Request) {
   if (body.buy_price !== undefined) state.buy_price = parseFloat(body.buy_price);
   if (body.wallet_balance !== undefined) state.wallet_balance = parseFloat(body.wallet_balance);
   if (body.egp_invested !== undefined) state.egp_invested = parseFloat(body.egp_invested);
+  if (body.total_profit !== undefined) state.total_profit = parseFloat(body.total_profit);
+  if (body.peak_price !== undefined) state.peak_price = parseFloat(body.peak_price);
 
   if (state.in_position && !state.peak_price && state.buy_price) {
     state.peak_price = state.buy_price;
