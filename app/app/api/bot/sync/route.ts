@@ -37,3 +37,10 @@ export async function GET() {
   const state = await getState();
   return NextResponse.json({ state });
 }
+
+/** DELETE /api/bot/sync — wipes the trade log */
+export async function DELETE() {
+  const { getRedis, KEYS } = await import("@/lib/redis");
+  await getRedis().del(KEYS.TRADES);
+  return NextResponse.json({ ok: true, message: "Trade log cleared" });
+}
