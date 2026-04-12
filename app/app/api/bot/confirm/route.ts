@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getState, saveState, logTrade, getRedis } from "@/lib/redis";
+import { getState, saveState, logTrade, getRedis, KEYS } from "@/lib/redis";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -70,6 +70,12 @@ export async function POST(request: Request) {
 
     await saveState(state);
     await logTrade({ timestamp: new Date().toISOString(), action: "SELL", price, egp_amount: sell_value, grams, profit, wallet_balance: state.wallet_balance });
+
+    // ── Guard: prevent the cron tick auto-sync from logging a 2nd SELL ────────
+    const r = getRedis();
+    await r.set("goldmine:sell_confirmed", "1", { ex: 300 }); // expires in 5 min
+    await r.del("goldmine:last_sell_signal");  // clear cooldown
+    await r.del("goldmine:last_wallet_fetch"); // force immediate portfolio re-sync
 
     return NextResponse.json({ ok: true, action: "sell", profit, state });
   }

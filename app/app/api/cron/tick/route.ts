@@ -17,13 +17,13 @@ import {
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const BASE_DIP_PCT   = parseFloat(process.env.DIP_BUY_PCT        ?? "0.5");
-const BASE_TRAIL_PCT = parseFloat(process.env.TRAIL_STOP_PCT      ?? "0.4");
+const BASE_DIP_PCT   = parseFloat(process.env.DIP_BUY_PCT        ?? "0.15"); // Lowered from 0.5% for highly active trading
+const BASE_TRAIL_PCT = parseFloat(process.env.TRAIL_STOP_PCT      ?? "0.15"); // Lowered from 0.4% to lock in smaller, frequent profits
 const LOW_WALLET     = parseFloat(process.env.LOW_WALLET_THRESHOLD ?? "500");
 const DRY_RUN        = process.env.DRY_RUN === "true";
 
-// DCA allocation: invest in 3 tranches — 40% / 40% / 20%
-const DCA_TRANCHES = [0.4, 0.4, 0.2];
+// DCA allocation: All-in (100%) for maximum rotation. We want idle cash actively working.
+const DCA_TRANCHES = [1.0];
 
 const CRON_SECRET = process.env.CRON_SECRET;
 const dryTag = DRY_RUN ? "[DRY RUN] " : "";
@@ -73,14 +73,39 @@ export async function GET(request: Request) {
           state.trailing_high = state.trailing_high ?? price;
           console.log(`[tick] Auto-detected manual buy: ${portfolio.grams}g`);
         } else if (portfolio.grams === 0 && state.in_position) {
-          // User sold manually — bot didn't know, now it does. Reset fully.
-          const profit = state.buy_price && state.grams_held
-            ? (price - state.buy_price) * state.grams_held
-            : 0;
-          const gramsWereHeld = state.grams_held ?? 0;
+          // User sold manually — check if they already confirmed via dashboard
+          const alreadyConfirmed = await r.get<string>("goldmine:sell_confirmed");
 
-          state.total_profit  = (state.total_profit ?? 0) + profit;
-          state.trade_count   = (state.trade_count ?? 0) + 1;
+          if (alreadyConfirmed) {
+            // Dashboard confirm already logged the trade — just clean up the flag
+            await r.del("goldmine:sell_confirmed");
+            console.log(`[tick] Sell already confirmed via dashboard — skipping duplicate log`);
+          } else {
+            // Genuine auto-detection: bot didn't know about this sell, log it now
+            const profit = state.buy_price && state.grams_held
+              ? (price - state.buy_price) * state.grams_held
+              : 0;
+            const gramsWereHeld = state.grams_held ?? 0;
+
+            state.total_profit = (state.total_profit ?? 0) + profit;
+            state.trade_count  = (state.trade_count ?? 0) + 1;
+
+            await logTrade({
+              timestamp: new Date().toISOString(),
+              action: "SELL",
+              price,
+              egp_amount: gramsWereHeld * price,
+              grams: gramsWereHeld,
+              profit,
+              wallet_balance: state.wallet_balance,
+            });
+
+            console.log(`[tick] Auto-detected manual sell — logged trade, profit: ${profit.toFixed(2)} EGP`);
+            const { telegramInfo } = await import("@/lib/telegram");
+            await telegramInfo(`✅ <b>Sell detected & synced!</b>\n\nProfit: <b>${profit >= 0 ? '+' : ''}${profit.toFixed(2)} EGP</b>\nWallet now: <b>${state.wallet_balance.toFixed(2)} EGP</b>\n\n<i>Bot is now watching for the next buy signal.</i>`);
+          }
+
+          // Reset position state (always, regardless of who logged it)
           state.in_position   = false;
           state.grams_held    = null;
           state.buy_price     = null;
@@ -89,25 +114,9 @@ export async function GET(request: Request) {
           state.trailing_high = null;
           state.dca_level     = 0;
           state.dca_reserved  = 0;
-          state.peak_price    = price; // reset peak to current so buy signals work
+          state.peak_price    = price; // reset peak so buy signals work
 
-          // Log the trade so history is accurate
-          await logTrade({
-            timestamp: new Date().toISOString(),
-            action: "SELL",
-            price,
-            egp_amount: gramsWereHeld * price,
-            grams: gramsWereHeld,
-            profit,
-            wallet_balance: state.wallet_balance,
-          });
-
-          // Clear any pending sell signal cooldown so the state is clean
           await r.del("goldmine:last_sell_signal");
-
-          console.log(`[tick] Auto-detected manual sell — logged trade, profit: ${profit.toFixed(2)} EGP`);
-          const { telegramInfo } = await import("@/lib/telegram");
-          await telegramInfo(`✅ <b>Sell detected & synced!</b>\n\nProfit: <b>${profit >= 0 ? '+' : ''}${profit.toFixed(2)} EGP</b>\nWallet now: <b>${state.wallet_balance.toFixed(2)} EGP</b>\n\n<i>Bot is now watching for the next buy signal.</i>`);
         } else if (portfolio.grams > 0) {
           state.grams_held = portfolio.grams;
         }
