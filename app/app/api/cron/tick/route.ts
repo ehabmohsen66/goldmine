@@ -11,7 +11,7 @@ import {
 } from "@/lib/email";
 import { analyzeMarket } from "@/lib/strategy";
 import {
-  telegramBuySignal, telegramSellSignal, telegramHoldAlert, telegramError,
+  telegramBuySignal, telegramSellSignal, telegramHoldAlert, telegramError, telegramInfo,
 } from "@/lib/telegram";
 
 export const runtime = "nodejs";
@@ -73,11 +73,41 @@ export async function GET(request: Request) {
           state.trailing_high = state.trailing_high ?? price;
           console.log(`[tick] Auto-detected manual buy: ${portfolio.grams}g`);
         } else if (portfolio.grams === 0 && state.in_position) {
-          // User sold manually — reset position
-          state.in_position = false;
-          state.grams_held  = null;
-          state.buy_price   = null;
-          console.log(`[tick] Auto-detected manual sell`);
+          // User sold manually — bot didn't know, now it does. Reset fully.
+          const profit = state.buy_price && state.grams_held
+            ? (price - state.buy_price) * state.grams_held
+            : 0;
+          const gramsWereHeld = state.grams_held ?? 0;
+
+          state.total_profit  = (state.total_profit ?? 0) + profit;
+          state.trade_count   = (state.trade_count ?? 0) + 1;
+          state.in_position   = false;
+          state.grams_held    = null;
+          state.buy_price     = null;
+          state.egp_invested  = null;
+          state.buy_time      = null;
+          state.trailing_high = null;
+          state.dca_level     = 0;
+          state.dca_reserved  = 0;
+          state.peak_price    = price; // reset peak to current so buy signals work
+
+          // Log the trade so history is accurate
+          await logTrade({
+            timestamp: new Date().toISOString(),
+            action: "SELL",
+            price,
+            egp_amount: gramsWereHeld * price,
+            grams: gramsWereHeld,
+            profit,
+            wallet_balance: state.wallet_balance,
+          });
+
+          // Clear any pending sell signal cooldown so the state is clean
+          await r.del("goldmine:last_sell_signal");
+
+          console.log(`[tick] Auto-detected manual sell — logged trade, profit: ${profit.toFixed(2)} EGP`);
+          const { telegramInfo } = await import("@/lib/telegram");
+          await telegramInfo(`✅ <b>Sell detected & synced!</b>\n\nProfit: <b>${profit >= 0 ? '+' : ''}${profit.toFixed(2)} EGP</b>\nWallet now: <b>${state.wallet_balance.toFixed(2)} EGP</b>\n\n<i>Bot is now watching for the next buy signal.</i>`);
         } else if (portfolio.grams > 0) {
           state.grams_held = portfolio.grams;
         }
@@ -113,11 +143,21 @@ export async function GET(request: Request) {
       if (trailTriggered || sellSignalStrong) {
         const unrealizedProfit = (price - state.buy_price) * (state.grams_held ?? 0);
 
-        // 🔴 Send Telegram sell signal — user executes manually on MNGM
-        await telegramSellSignal(state.buy_price, price, state.grams_held ?? 0, unrealizedProfit);
-        await emailSold(state.buy_price, price, state.grams_held ?? 0, unrealizedProfit, state.wallet_balance ?? 0, state.trade_count ?? 0, state.total_profit ?? 0);
-        console.log(`${dryTag}SELL SIGNAL sent — price: ${price}, unrealized: ${unrealizedProfit.toFixed(2)} EGP`);
-        // State updated by user via POST /api/bot/confirm { action:"sell", ... }
+        // Rate-limit sell signals — only send once every 30 minutes
+        const lastSellSignal = await r.get<string>("goldmine:last_sell_signal");
+        const sellSignalAge  = lastSellSignal ? now - parseInt(lastSellSignal) : Infinity;
+        const SELL_SIGNAL_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
+
+        if (sellSignalAge >= SELL_SIGNAL_COOLDOWN_MS) {
+          // 🔴 Send Telegram sell signal — user executes manually on MNGM
+          await telegramSellSignal(state.buy_price, price, state.grams_held ?? 0, unrealizedProfit);
+          await emailSold(state.buy_price, price, state.grams_held ?? 0, unrealizedProfit, state.wallet_balance ?? 0, state.trade_count ?? 0, state.total_profit ?? 0);
+          await r.set("goldmine:last_sell_signal", String(now));
+          console.log(`${dryTag}SELL SIGNAL sent — price: ${price}, unrealized: ${unrealizedProfit.toFixed(2)} EGP`);
+        } else {
+          console.log(`[tick] Sell signal suppressed — cooldown active (${Math.round(sellSignalAge / 60000)}m elapsed, 30m cooldown)`);
+        }
+        // State is updated by portfolio auto-sync (detects grams=0) or via POST /api/bot/confirm
 
       } else if (changePct < -2.0) {
         const lastAlert = await r.get<string>(KEYS.LAST_HOLDING_ALERT);

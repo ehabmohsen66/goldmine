@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import {
   TrendingUp, TrendingDown, Activity, Wallet,
   BarChart3, RefreshCw, Play, Square, ChevronRight,
-  Zap, AlertTriangle, Clock,
+  Zap, AlertTriangle, Clock, CheckCircle, RotateCcw,
 } from "lucide-react";
 
 const PriceChart = dynamic(() => import("@/components/PriceChart"), { ssr: false });
@@ -46,6 +46,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [trades, setTrades] = useState<unknown[]>([]);
+  const [confirmMsg, setConfirmMsg] = useState<string | null>(null);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -84,6 +85,56 @@ export default function DashboardPage() {
     await fetch("/api/bot/stop", { method: "POST" });
     await fetchStatus();
     setActionLoading(false);
+  };
+
+  // ── Confirm Sell: tell the bot you already sold manually ─────────────────
+  const handleConfirmSell = async () => {
+    if (!state?.grams_held || !state?.last_price) return;
+    setActionLoading(true);
+    try {
+      const res = await fetch("/api/bot/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "sell",
+          price: state.last_price,
+          grams: state.grams_held,
+          egp_amount: state.grams_held * state.last_price,
+          wallet_balance: (state.wallet_balance ?? 0) + state.grams_held * state.last_price,
+        }),
+      });
+      if (res.ok) {
+        setConfirmMsg("✅ Sell confirmed! Bot state reset. Now watching for buy signals.");
+        await fetchStatus();
+        await fetchTrades();
+      } else {
+        setConfirmMsg("❌ Failed to confirm sell — check console.");
+      }
+    } catch (e) {
+      setConfirmMsg("❌ Network error.");
+    } finally {
+      setActionLoading(false);
+      setTimeout(() => setConfirmMsg(null), 6000);
+    }
+  };
+
+  // ── Force Sync: clear wallet fetch timestamp so next tick re-syncs ASAP ──
+  const handleForceSync = async () => {
+    setActionLoading(true);
+    try {
+      // Patch state to clear the throttle timestamp via sync endpoint
+      await fetch("/api/bot/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      setConfirmMsg("🔄 Sync requested — portfolio will update on the next cron tick (≤60s).");
+    } catch {
+      setConfirmMsg("❌ Sync request failed.");
+    } finally {
+      setActionLoading(false);
+      setTimeout(() => setConfirmMsg(null), 6000);
+    }
   };
 
   const pnlPct = state?.in_position && state.buy_price && state.last_price
@@ -163,6 +214,60 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* ── Confirm Sell Banner — appears when bot thinks you're holding ───── */}
+      {state?.in_position && (
+        <div style={{
+          marginBottom: 20, padding: "14px 20px", borderRadius: 14,
+          background: "rgba(234,179,8,0.08)", border: "1px solid rgba(234,179,8,0.3)",
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <AlertTriangle size={16} color="#EAB308" style={{ flexShrink: 0 }} />
+            <p style={{ fontSize: 13, color: "#EAB308", fontWeight: 500 }}>
+              Bot thinks you&apos;re holding <b>{(state.grams_held ?? 0).toFixed(4)}g</b>.
+              If you already sold manually on MNGM, click <b>Confirm Sell</b>.
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+            <button
+              className="btn-ghost"
+              onClick={handleForceSync}
+              disabled={actionLoading}
+              title="Force MNGM portfolio sync on next cron tick"
+              style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12 }}
+            >
+              <RotateCcw size={12} />
+              Force Sync
+            </button>
+            <button
+              onClick={handleConfirmSell}
+              disabled={actionLoading}
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "7px 14px", borderRadius: 8, fontSize: 13, fontWeight: 600,
+                background: "linear-gradient(135deg, #EAB308, #CA8A04)",
+                color: "#000", border: "none", cursor: "pointer",
+              }}
+            >
+              <CheckCircle size={13} />
+              {actionLoading ? "Confirming…" : "I Sold — Confirm"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Action feedback message ────────────────────────────────────────── */}
+      {confirmMsg && (
+        <div style={{
+          marginBottom: 20, padding: "12px 16px", borderRadius: 12,
+          background: confirmMsg.startsWith("✅") ? "rgba(34,197,94,0.08)" : confirmMsg.startsWith("🔄") ? "rgba(59,130,246,0.08)" : "rgba(239,68,68,0.08)",
+          border: `1px solid ${confirmMsg.startsWith("✅") ? "rgba(34,197,94,0.2)" : confirmMsg.startsWith("🔄") ? "rgba(59,130,246,0.2)" : "rgba(239,68,68,0.2)"}`,
+          fontSize: 13, color: confirmMsg.startsWith("✅") ? "#22C55E" : confirmMsg.startsWith("🔄") ? "#60A5FA" : "#EF4444",
+        }}>
+          {confirmMsg}
+        </div>
+      )}
 
       {/* ── Error Banner ───────────────────────────────────────────────────── */}
       {isError && state?.last_error && (

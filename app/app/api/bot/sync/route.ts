@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getState, saveState } from "@/lib/redis";
+import { getState, saveState, getRedis } from "@/lib/redis";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,7 +31,13 @@ export async function POST(request: Request) {
   }
 
   await saveState(state);
-  return NextResponse.json({ ok: true, state });
+
+  // Also reset the wallet-fetch throttle so the next cron tick re-syncs immediately
+  const r = getRedis();
+  await r.del("goldmine:last_wallet_fetch");
+  await r.del("goldmine:last_sell_signal"); // clear sell signal cooldown too
+
+  return NextResponse.json({ ok: true, state, synced: true });
 }
 
 export async function GET() {
