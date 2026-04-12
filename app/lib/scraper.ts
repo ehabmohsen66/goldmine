@@ -175,7 +175,12 @@ export async function loginAndGetPortfolio(): Promise<{ wallet: number; grams: n
       const gramsMatch =
         content.match(/([\d]+\.[\d]+)\s*[Gg]ram/i) ||
         content.match(/[Gg]ram[s]?\s*[:\s]*([\d]+\.[\d]+)/i);
-      const grams = gramsMatch ? parseFloat(gramsMatch[1]) : 0;
+      let grams = gramsMatch ? parseFloat(gramsMatch[1]) : 0;
+      
+      // MNGM sometimes leaves fractional dust (e.g., 0.001g) after selling
+      if (grams < 0.005) {
+        grams = 0;
+      }
 
       console.log(`[scraper] Portfolio sync — wallet: ${wallet} EGP, grams: ${grams}g`);
       return { wallet, grams };
