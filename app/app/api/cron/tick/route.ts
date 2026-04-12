@@ -146,8 +146,11 @@ export async function GET(request: Request) {
         ? ((state.trailing_high - price) / state.trailing_high) * 100
         : 0;
 
-      const trailTriggered   = trailDropPct >= adaptiveTrailPct && changePct > 0;
-      const sellSignalStrong = signal.action === "SELL_STRONG" && changePct > 0;
+      // Ensure we clear the MNGM ~1.0% spread fee! We must be up at least 1.3% gross to net a real profit.
+      const MIN_PROFIT_PCT = parseFloat(process.env.MIN_PROFIT_PCT ?? "1.3");
+
+      const trailTriggered   = trailDropPct >= adaptiveTrailPct && changePct >= MIN_PROFIT_PCT;
+      const sellSignalStrong = signal.action === "SELL_STRONG" && changePct >= MIN_PROFIT_PCT;
 
       if (trailTriggered || sellSignalStrong) {
         const unrealizedProfit = (price - state.buy_price) * (state.grams_held ?? 0);
