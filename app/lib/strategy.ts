@@ -67,6 +67,8 @@ export interface MarketSignal {
   adaptiveDipPct: number;
   /** Adaptive trail distance adjusted for current volatility */
   adaptiveTrailPct: number;
+  /** Is the momentum strong enough to enter immediately without a dip? */
+  momentumBuy: boolean;
 }
 
 export function analyzeMarket(
@@ -90,10 +92,20 @@ export function analyzeMarket(
   let action: MarketSignal["action"] = "HOLD";
   let trend: MarketSignal["trend"] = "NEUTRAL";
   let confidence = 0;
+  let momentumBuy = false;
 
   if (emaShort !== null && emaLong !== null) {
     if (emaShort > emaLong) trend = "BULLISH";
     else if (emaShort < emaLong) trend = "BEARISH";
+
+    if (trend === "BULLISH" && rsi !== null && rsi < 65 && rsi >= 40) {
+      const spreadPct = ((emaShort - emaLong) / emaLong) * 100;
+      // If the short 5-minute trend is notably outpacing the 20-minute trend, 
+      // we have strong momentum to ride
+      if (spreadPct > 0.05) {
+        momentumBuy = true;
+      }
+    }
   }
 
   if (rsi !== null) {
@@ -107,5 +119,5 @@ export function analyzeMarket(
   if (action.startsWith("SELL") && trend === "BEARISH") confidence += 10;
   confidence = Math.min(confidence, 100);
 
-  return { action, rsi, emaShort, emaLong, atrPct, trend, confidence, adaptiveDipPct, adaptiveTrailPct };
+  return { action, rsi, emaShort, emaLong, atrPct, trend, confidence, adaptiveDipPct, adaptiveTrailPct, momentumBuy };
 }

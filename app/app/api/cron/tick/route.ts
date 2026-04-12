@@ -193,7 +193,10 @@ export async function GET(request: Request) {
       // Strong RSI oversold — buy immediately regardless
       const rsiOverride = signal.action === "BUY_STRONG" && state.dca_level === 0;
 
-      const shouldBuy = level1Hit || level2Hit || level3Hit || rsiOverride;
+      // Smart Momentum Ride: if the market is trending up strongly and RSI is healthy, get in!
+      const momentumRide = signal.momentumBuy && state.dca_level === 0;
+
+      const shouldBuy = level1Hit || level2Hit || level3Hit || rsiOverride || momentumRide;
 
       if (shouldBuy) {
         const wallet = state.wallet_balance ?? 0;
@@ -201,7 +204,7 @@ export async function GET(request: Request) {
         // Determine how much to invest in this tranche
         let investPct: number;
         if (state.dca_level === 0) {
-          investPct = rsiOverride ? 0.8 : DCA_TRANCHES[0];
+          investPct = (rsiOverride || momentumRide) ? 1.0 : DCA_TRANCHES[0];
         } else {
           investPct = DCA_TRANCHES[Math.min(state.dca_level, DCA_TRANCHES.length - 1)];
         }
