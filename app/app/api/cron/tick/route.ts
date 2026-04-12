@@ -57,39 +57,51 @@ export async function GET(request: Request) {
     state.last_error = null;
     await appendPrice(price);
 
-    // ── 2. Auto-sync portfolio from MNGM every 10 min ────────────────────────
+    // ── 2. Auto-sync portfolio from MNGM every 2 min ─────────────────────────
     const lastWalletFetch = await r.get<string>("goldmine:last_wallet_fetch");
     const walletAge = lastWalletFetch ? now - parseInt(lastWalletFetch) : Infinity;
-    if (state.wallet_balance === null || walletAge > 10 * 60 * 1000) {
+    if (state.wallet_balance === null || walletAge > 2 * 60 * 1000) {
       const portfolio = await loginAndGetPortfolio();
       if (portfolio !== null) {
+        const prevWallet = state.wallet_balance ?? 0;
+        const walletIncrease = portfolio.wallet - prevWallet;
         state.wallet_balance = portfolio.wallet;
-        // If grams changed on MNGM (user bought/sold manually), update state
-        if (portfolio.grams > 0 && !state.in_position) {
-          // User bought manually — bot didn't know, now it does
-          state.in_position = true;
-          state.grams_held  = portfolio.grams;
-          state.peak_price  = state.peak_price ?? price;
-          state.trailing_high = state.trailing_high ?? price;
-          console.log(`[tick] Auto-detected manual buy: ${portfolio.grams}g`);
-        } else if (portfolio.grams === 0 && state.in_position) {
-          // User sold manually — check if they already confirmed via dashboard
-          const alreadyConfirmed = await r.get<string>("goldmine:sell_confirmed");
 
+        // ── Case A: Bot didn't know user was holding — auto-detect BUY ───────
+        if (portfolio.grams > 0 && !state.in_position) {
+          state.in_position   = true;
+          state.grams_held    = portfolio.grams;
+          state.buy_price     = price; // best estimate
+          state.buy_time      = new Date().toISOString();
+          state.peak_price    = state.peak_price ?? price;
+          state.trailing_high = price;
+          state.dca_level     = 1;
+          // Log it so trade history is complete
+          await logTrade({
+            timestamp: new Date().toISOString(),
+            action: "BUY",
+            price,
+            egp_amount: portfolio.grams * price,
+            grams: portfolio.grams,
+            profit: 0,
+            wallet_balance: state.wallet_balance,
+          });
+          await telegramInfo(`🟢 <b>Manual buy detected!</b>\n\n<b>${portfolio.grams.toFixed(4)}g</b> @ ${price.toFixed(2)} EGP/g\nBot is now tracking your position & will alert you when to sell.`);
+          console.log(`[tick] Auto-detected manual buy: ${portfolio.grams}g`);
+
+        // ── Case B: Bot knew user was holding, now grams=0 → SELL ────────────
+        } else if (portfolio.grams === 0 && state.in_position) {
+          const alreadyConfirmed = await r.get<string>("goldmine:sell_confirmed");
           if (alreadyConfirmed) {
-            // Dashboard confirm already logged the trade — just clean up the flag
             await r.del("goldmine:sell_confirmed");
             console.log(`[tick] Sell already confirmed via dashboard — skipping duplicate log`);
           } else {
-            // Genuine auto-detection: bot didn't know about this sell, log it now
             const profit = state.buy_price && state.grams_held
               ? (price - state.buy_price) * state.grams_held
               : 0;
             const gramsWereHeld = state.grams_held ?? 0;
-
             state.total_profit = (state.total_profit ?? 0) + profit;
             state.trade_count  = (state.trade_count ?? 0) + 1;
-
             await logTrade({
               timestamp: new Date().toISOString(),
               action: "SELL",
@@ -99,13 +111,10 @@ export async function GET(request: Request) {
               profit,
               wallet_balance: state.wallet_balance,
             });
-
-            console.log(`[tick] Auto-detected manual sell — logged trade, profit: ${profit.toFixed(2)} EGP`);
-            const { telegramInfo } = await import("@/lib/telegram");
+            console.log(`[tick] Auto-detected manual sell — profit: ${profit.toFixed(2)} EGP`);
             await telegramInfo(`✅ <b>Sell detected & synced!</b>\n\nProfit: <b>${profit >= 0 ? '+' : ''}${profit.toFixed(2)} EGP</b>\nWallet now: <b>${state.wallet_balance.toFixed(2)} EGP</b>\n\n<i>Bot is now watching for the next buy signal.</i>`);
           }
-
-          // Reset position state (always, regardless of who logged it)
+          // Reset position state
           state.in_position   = false;
           state.grams_held    = null;
           state.buy_price     = null;
@@ -114,10 +123,31 @@ export async function GET(request: Request) {
           state.trailing_high = null;
           state.dca_level     = 0;
           state.dca_reserved  = 0;
-          state.peak_price    = price; // reset peak so buy signals work
-
+          state.peak_price    = price;
           await r.del("goldmine:last_sell_signal");
+
+        // ── Case C: Bot had no position, grams=0, but wallet GREW → quick sell
+        } else if (portfolio.grams === 0 && !state.in_position && walletIncrease > 50) {
+          // User did a full buy+sell cycle the bot missed entirely
+          state.trade_count = (state.trade_count ?? 0) + 1;
+          const profit = walletIncrease; // net cash gain is the profit
+          state.total_profit = (state.total_profit ?? 0) + profit;
+          await logTrade({
+            timestamp: new Date().toISOString(),
+            action: "SELL",
+            price,
+            egp_amount: portfolio.wallet,
+            grams: 0, // unknown since bot missed the position
+            profit,
+            wallet_balance: state.wallet_balance,
+          });
+          state.peak_price = price;
+          await r.del("goldmine:last_sell_signal");
+          console.log(`[tick] Detected missed buy+sell cycle — wallet grew by ${walletIncrease.toFixed(2)} EGP`);
+          await telegramInfo(`✅ <b>Trade cycle detected!</b>\n\nNet gain: <b>+${profit.toFixed(2)} EGP</b>\nWallet now: <b>${state.wallet_balance.toFixed(2)} EGP</b>\n\n<i>Bot is now watching for the next buy signal.</i>`);
+
         } else if (portfolio.grams > 0) {
+          // Still holding — keep grams in sync
           state.grams_held = portfolio.grams;
         }
       }
