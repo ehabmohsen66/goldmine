@@ -421,13 +421,13 @@ export default function EgxPage() {
         return (
           <>
             {/* ── AI Screenshot Analyzer Card ── */}
-            <div className="glass-card" style={{ padding: 24, marginBottom: 16 }}>
+            <div className="glass-card" style={{ padding: 24, marginBottom: 16, direction: "rtl", textAlign: "right" }}>
                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
                  <Zap size={16} color="#A855F7" />
-                 <h2 style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>تحليل مسكرين شوت (Thndr)</h2>
+                 <h2 style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>تحليل صورة المحفظة (Thndr) بالذكاء الاصطناعي</h2>
                </div>
                <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 16, lineHeight: 1.5 }}>
-                 ارفع صورة من محفظتك في تطبيق Thndr أو أي تطبيق تداول. سيقوم الذكاء الاصطناعي باستخراج الأسهم التي تمتلكها وسعر متوسط التكلفة، ليعطيك نصائح حية حالياً للبيع أو التعديل!
+                 قم برفع لقطة شاشة (Screenshot) لمحفظتك من تطبيق ثاندر أو أي تطبيق تداول آخر. سيقوم النظام باستخراج الأسهم ومتوسط أسعار الشراء، ويمنحك توصيات فورية (شراء، بيع، احتفاظ، أو تعديل) بناءً على حركة السوق الحالية!
                </p>
 
                <label style={{
@@ -461,16 +461,16 @@ export default function EgxPage() {
                            padding: 16, background: "rgba(0,0,0,0.2)", 
                            border: `1px solid ${c}44`, borderRadius: 12 
                          }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10 }}>
                               <div>
                                 <span style={{ fontWeight: 800, fontSize: 15, color: "var(--text-primary)" }}>{r.symbol}</span>
-                                {r.shares > 0 && <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 6 }}>({r.shares} سهم)</span>}
+                                {r.shares > 0 && <span style={{ fontSize: 11, color: "var(--text-muted)", marginRight: 6 }}>({r.shares} سهم)</span>}
                                 {r.error && <p style={{ fontSize: 11, color: "#EF4444", marginTop: 4 }}>{r.error}</p>}
                                 {!r.error && (
-                                  <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>
-                                    الشراء: <b style={{ color: "var(--text-primary)" }}>{r.buyPrice}</b> | 
-                                    الحالي: <b style={{ color: "var(--text-primary)" }}>{r.currentPrice}</b> | 
-                                    العائد: <b style={{ color: r.pnlPct >= 0 ? '#22C55E' : '#EF4444' }}>{r.pnlPct > 0 ? "+" : ""}{r.pnlPct?.toFixed(2)}%</b>
+                                  <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6, display: "flex", gap: 12, flexWrap: "wrap" }}>
+                                    <span>متوسط الشراء: <b style={{ color: "var(--text-primary)" }}>{r.buyPrice}</b></span>
+                                    <span>السعر الحالي: <b style={{ color: "var(--text-primary)" }}>{r.currentPrice}</b></span>
+                                    <span>العائد: <b style={{ color: r.pnlPct >= 0 ? '#22C55E' : '#EF4444' }} dir="ltr">{r.pnlPct > 0 ? "+" : ""}{r.pnlPct?.toFixed(2)}%</b></span>
                                   </p>
                                 )}
                               </div>
