@@ -19,7 +19,7 @@ export const maxDuration = 60;
 
 const BASE_DIP_PCT   = parseFloat(process.env.DIP_BUY_PCT        ?? "0.15"); // Lowered from 0.5% for highly active trading
 const BASE_TRAIL_PCT = parseFloat(process.env.TRAIL_STOP_PCT      ?? "0.15"); // Lowered from 0.4% to lock in smaller, frequent profits
-const LOW_WALLET     = parseFloat(process.env.LOW_WALLET_THRESHOLD ?? "500");
+const LOW_WALLET     = parseFloat(process.env.LOW_WALLET_THRESHOLD ?? "10");
 const DRY_RUN        = process.env.DRY_RUN === "true";
 
 // DCA allocation: 3 tranches — 50% initial, 30% on deeper dip, 20% on deepest dip.
