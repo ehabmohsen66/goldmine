@@ -199,9 +199,10 @@ function MoodBar({ bullish, neutral, bearish }: { bullish: number; neutral: numb
 }
 
 export default function EgxPage() {
-  const [data, setData]       = useState<EgxBriefResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [tab, setTab]         = useState<"market" | "portfolio" | "history">("market");
+  const [data, setData]             = useState<EgxBriefResponse | null>(null);
+  const [loading, setLoading]       = useState(true);
+  const [tab, setTab]               = useState<"market" | "portfolio" | "history">("market");
+  const [strongBuyOnly, setStrongBuyOnly] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -366,25 +367,70 @@ export default function EgxPage() {
       )}
 
       {/* ── PORTFOLIO TAB ── */}
-      {tab === "portfolio" && (
-        <div className="glass-card" style={{ padding: 24 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-            <Briefcase size={15} color="#22C55E" />
-            <h2 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>المحفظة التلقائية</h2>
-            <span style={{ fontSize: 11, color: "var(--text-muted)", marginRight: "auto" }}>
-              أسهم أرسلنا لها إشارة شراء ولم تصل بعد لإشارة البيع
-            </span>
-          </div>
-          {loading ? [...Array(3)].map((_, i) => <div key={i} className="skeleton" style={{ height: 75, borderRadius: 12, marginBottom: 8 }} />) :
-           data?.portfolio?.length ? data.portfolio.map(p => <PortfolioCard key={p.symbol} pos={p} />) : (
-            <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--text-muted)" }}>
-              <Briefcase size={32} style={{ margin: "0 auto 12px", opacity: 0.3 }} />
-              <p style={{ fontSize: 14 }}>المحفظة فارغة حالياً</p>
-              <p style={{ fontSize: 12, marginTop: 6 }}>ستظهر الأسهم هنا عند إرسال إشارة شراء</p>
+      {tab === "portfolio" && (() => {
+        const strongBuyCount = data?.portfolio?.filter(p => p.lastSignal === "STRONG_BUY").length ?? 0;
+        const visiblePortfolio = strongBuyOnly
+          ? (data?.portfolio ?? []).filter(p => p.lastSignal === "STRONG_BUY")
+          : (data?.portfolio ?? []);
+        return (
+          <div className="glass-card" style={{ padding: 24 }}>
+            {/* Header row */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+              <Briefcase size={15} color="#22C55E" />
+              <h2 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>المحفظة التلقائية</h2>
+              <span style={{ fontSize: 11, color: "var(--text-muted)", marginRight: "auto" }}>
+                أسهم أرسلنا لها إشارة شراء ولم تصل بعد لإشارة البيع
+              </span>
+
+              {/* ── STRONG BUY filter chip ── */}
+              <button
+                onClick={() => setStrongBuyOnly(v => !v)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700,
+                  border: strongBuyOnly ? "1px solid #22C55E" : "1px solid rgba(34,197,94,0.25)",
+                  background: strongBuyOnly ? "rgba(34,197,94,0.15)" : "rgba(34,197,94,0.05)",
+                  color: strongBuyOnly ? "#22C55E" : "rgba(34,197,94,0.6)",
+                  cursor: "pointer", transition: "all 0.2s",
+                  boxShadow: strongBuyOnly ? "0 0 10px rgba(34,197,94,0.2)" : "none",
+                }}
+              >
+                <span style={{ fontSize: 10 }}>⚡</span>
+                STRONG BUY فقط
+                {strongBuyCount > 0 && (
+                  <span style={{
+                    fontSize: 10, fontWeight: 800,
+                    background: strongBuyOnly ? "#22C55E" : "rgba(34,197,94,0.3)",
+                    color: strongBuyOnly ? "#000" : "#22C55E",
+                    borderRadius: 99, padding: "1px 6px", minWidth: 18, textAlign: "center",
+                  }}>
+                    {strongBuyCount}
+                  </span>
+                )}
+              </button>
             </div>
-          )}
-        </div>
-      )}
+
+            {/* Empty / filtered-empty states */}
+            {loading ? (
+              [...Array(3)].map((_, i) => <div key={i} className="skeleton" style={{ height: 75, borderRadius: 12, marginBottom: 8 }} />)
+            ) : visiblePortfolio.length ? (
+              visiblePortfolio.map(p => <PortfolioCard key={p.symbol} pos={p} />)
+            ) : strongBuyOnly ? (
+              <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--text-muted)" }}>
+                <span style={{ fontSize: 36, display: "block", marginBottom: 12 }}>⚡</span>
+                <p style={{ fontSize: 14, color: "#22C55E" }}>لا توجد أسهم بإشارة STRONG BUY حالياً</p>
+                <p style={{ fontSize: 12, marginTop: 6 }}>جرّب إيقاف الفلتر لعرض كل المحفظة</p>
+              </div>
+            ) : (
+              <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--text-muted)" }}>
+                <Briefcase size={32} style={{ margin: "0 auto 12px", opacity: 0.3 }} />
+                <p style={{ fontSize: 14 }}>المحفظة فارغة حالياً</p>
+                <p style={{ fontSize: 12, marginTop: 6 }}>ستظهر الأسهم هنا عند إرسال إشارة شراء</p>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── HISTORY TAB ── */}
       {tab === "history" && (
