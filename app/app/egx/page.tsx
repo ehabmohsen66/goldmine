@@ -203,6 +203,52 @@ export default function EgxPage() {
   const [loading, setLoading]       = useState(true);
   const [tab, setTab]               = useState<"market" | "portfolio" | "history">("market");
   const [strongBuyOnly, setStrongBuyOnly] = useState(false);
+  
+  // AI Upload State
+  const [analyzingImage, setAnalyzingImage] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const [recommendations, setRecommendations] = useState<any[] | null>(null);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setAnalyzingImage(true);
+    setAiError("");
+    setRecommendations(null);
+
+    try {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64String = reader.result as string;
+
+        // 1. Analyze with Gemini
+        const geminiRes = await fetch("/api/egx/analyze-screenshot", {
+          method: "POST", 
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageBase64: base64String }),
+        });
+        if (!geminiRes.ok) throw new Error((await geminiRes.json())?.error || "Gemini API error");
+        const { portfolio } = await geminiRes.json();
+
+        // 2. Feed to Recommendations logic
+        const recRes = await fetch("/api/egx/recommend", {
+          method: "POST", 
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ portfolio })
+        });
+        if (!recRes.ok) throw new Error((await recRes.json())?.error || "Recommendation API error");
+        const { recommendations } = await recRes.json();
+
+        setRecommendations(recommendations);
+        setAnalyzingImage(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (err: any) {
+      setAiError(err.message || String(err));
+      setAnalyzingImage(false);
+    }
+  };
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -373,7 +419,82 @@ export default function EgxPage() {
           ? (data?.portfolio ?? []).filter(p => p.lastSignal === "STRONG_BUY")
           : (data?.portfolio ?? []);
         return (
-          <div className="glass-card" style={{ padding: 24 }}>
+          <>
+            {/* ── AI Screenshot Analyzer Card ── */}
+            <div className="glass-card" style={{ padding: 24, marginBottom: 16 }}>
+               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                 <Zap size={16} color="#A855F7" />
+                 <h2 style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>تحليل مسكرين شوت (Thndr)</h2>
+               </div>
+               <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 16, lineHeight: 1.5 }}>
+                 ارفع صورة من محفظتك في تطبيق Thndr أو أي تطبيق تداول. سيقوم الذكاء الاصطناعي باستخراج الأسهم التي تمتلكها وسعر متوسط التكلفة، ليعطيك نصائح حية حالياً للبيع أو التعديل!
+               </p>
+
+               <label style={{
+                 display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                 padding: "16px", borderRadius: 12, border: "1px dashed rgba(168,85,247,0.4)",
+                 background: "rgba(168,85,247,0.05)", color: "#A855F7", cursor: "pointer",
+                 transition: "all 0.2s", fontWeight: 600, fontSize: 13
+               }}>
+                 <input type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageUpload} disabled={analyzingImage} />
+                 {analyzingImage ? (
+                    <><span className="pulse-dot" style={{ background: "#A855F7" }} /> جاري تحليل الصورة واستخراج التوصيات...</>
+                 ) : (
+                    "📷 رفع لقطة شاشة وتحليل المؤشرات"
+                 )}
+               </label>
+               {aiError && <p style={{ fontSize: 11, color: "#EF4444", marginTop: 10 }}>خطأ: {aiError}</p>}
+
+               {/* AI Results */}
+               {recommendations && (
+                 <div style={{ marginTop: 24 }}>
+                   <div style={{ height: 1, background: "rgba(255,255,255,0.05)", margin: "0 -24px 20px -24px" }} />
+                   <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 16, color: "#A855F7" }}>✨ توصيات ذكية لمحفظتك:</h3>
+                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                     {recommendations.map((r, i) => {
+                       const c = r.recommendationType === 'BUY_MORE' || r.recommendationType === 'AVERAGE_DOWN' ? '#22C55E' 
+                               : r.recommendationType === 'TAKE_PROFIT' ? '#3B82F6' 
+                               : r.recommendationType === 'CUT_LOSS' ? '#EF4444' 
+                               : '#EAB308';
+                       return (
+                         <div key={i} style={{ 
+                           padding: 16, background: "rgba(0,0,0,0.2)", 
+                           border: `1px solid ${c}44`, borderRadius: 12 
+                         }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                              <div>
+                                <span style={{ fontWeight: 800, fontSize: 15, color: "var(--text-primary)" }}>{r.symbol}</span>
+                                {r.shares > 0 && <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 6 }}>({r.shares} سهم)</span>}
+                                {r.error && <p style={{ fontSize: 11, color: "#EF4444", marginTop: 4 }}>{r.error}</p>}
+                                {!r.error && (
+                                  <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>
+                                    الشراء: <b style={{ color: "var(--text-primary)" }}>{r.buyPrice}</b> | 
+                                    الحالي: <b style={{ color: "var(--text-primary)" }}>{r.currentPrice}</b> | 
+                                    العائد: <b style={{ color: r.pnlPct >= 0 ? '#22C55E' : '#EF4444' }}>{r.pnlPct > 0 ? "+" : ""}{r.pnlPct?.toFixed(2)}%</b>
+                                  </p>
+                                )}
+                              </div>
+                              <span style={{ 
+                                fontSize: 10, fontWeight: 800, padding: "4px 8px", borderRadius: 6, 
+                                background: `${c}15`, color: c, border: `1px solid ${c}30`
+                              }}>
+                                {r.recommendationType.replace("_", " ")}
+                              </span>
+                            </div>
+                            {!r.error && (
+                              <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 12, lineHeight: 1.5, padding: "10px", background: "rgba(255,255,255,0.03)", borderRadius: 8 }}>
+                                💡 {r.recommendationText}
+                              </p>
+                            )}
+                         </div>
+                       );
+                     })}
+                   </div>
+                 </div>
+               )}
+            </div>
+
+            <div className="glass-card" style={{ padding: 24 }}>
             {/* Header row */}
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
               <Briefcase size={15} color="#22C55E" />
@@ -429,6 +550,7 @@ export default function EgxPage() {
               </div>
             )}
           </div>
+          </>
         );
       })()}
 
