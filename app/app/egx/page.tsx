@@ -8,6 +8,7 @@ import {
   ArrowUpRight, ArrowDownRight, Briefcase, Bell,
 } from "lucide-react";
 
+
 interface EgxStock {
   symbol: string;
   name: string;
@@ -58,6 +59,7 @@ interface EgxBriefResponse {
   } | null;
   portfolio: EgxPosition[];
   alerts: EgxAlert[];
+  marketStatus: { open: boolean; reason: string } | null;
   lastScan: string | null;
   cachedAt: number;
   error?: string;
@@ -316,6 +318,20 @@ export default function EgxPage() {
         </div>
       </div>
 
+      {/* ── Market Closed Banner ── */}
+      {data?.marketStatus && !data.marketStatus.open && (
+        <div style={{
+          marginBottom: 20, padding: "12px 20px", borderRadius: 12, direction: "rtl",
+          background: "rgba(234,179,8,0.07)", border: "1px solid rgba(234,179,8,0.25)",
+          display: "flex", alignItems: "center", gap: 10,
+        }}>
+          <AlertTriangle size={15} color="#EAB308" style={{ flexShrink: 0 }} />
+          <p style={{ fontSize: 13, color: "#EAB308", fontWeight: 500 }}>
+            <b>⚠️ {data.marketStatus.reason}</b>
+            &nbsp;— البيانات المعروضة من آخر جلسة تداول وقد لا تعكس الوضع الفوري.
+          </p>
+        </div>
+      )}
       {/* ── Market Mood ── */}
       <div className="glass-card" style={{ padding: "20px 24px", marginBottom: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>

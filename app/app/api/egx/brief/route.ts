@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getEgxDailyBrief } from "@/lib/egx";
+import { getEgxDailyBrief, getMarketStatus } from "@/lib/egx";
 import { getEgxAlerts, getEgxPortfolio, getRedis } from "@/lib/redis";
 
 export const runtime = "nodejs";
@@ -41,6 +41,7 @@ export async function GET() {
       overview,
       portfolio,
       alerts,
+      marketStatus: getMarketStatus(),
       lastScan: lastScan ? new Date(parseInt(lastScan)).toISOString() : null,
       cachedAt: cached?.ts ?? Date.now(),
     });

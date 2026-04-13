@@ -9,6 +9,13 @@ const CACHE_KEY = "goldmine:egx_scan_all_cache";
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 export async function POST(req: Request) {
+  const apiSecret = process.env.API_SECRET;
+  if (apiSecret) {
+    const incoming = req.headers.get("x-api-secret");
+    if (incoming !== apiSecret) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+  }
   try {
     const body = await req.json();
     const portfolio: { symbol: string; buyPrice: number; shares?: number }[] = body.portfolio || [];

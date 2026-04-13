@@ -22,8 +22,9 @@ const BASE_TRAIL_PCT = parseFloat(process.env.TRAIL_STOP_PCT      ?? "0.15"); //
 const LOW_WALLET     = parseFloat(process.env.LOW_WALLET_THRESHOLD ?? "500");
 const DRY_RUN        = process.env.DRY_RUN === "true";
 
-// DCA allocation: All-in (100%) for maximum rotation. We want idle cash actively working.
-const DCA_TRANCHES = [1.0];
+// DCA allocation: 3 tranches — 50% initial, 30% on deeper dip, 20% on deepest dip.
+// This ensures we always have reserves for averaging down on bigger drops.
+const DCA_TRANCHES = [0.5, 0.3, 0.2];
 
 const CRON_SECRET = process.env.CRON_SECRET;
 const dryTag = DRY_RUN ? "[DRY RUN] " : "";

@@ -4,6 +4,15 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 
 export async function POST(req: Request) {
+  // Auth check — require API_SECRET header if configured
+  const apiSecret = process.env.API_SECRET;
+  if (apiSecret) {
+    const incoming = req.headers.get("x-api-secret");
+    if (incoming !== apiSecret) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+  }
+
   try {
     const { imageBase64 } = await req.json();
 

@@ -146,17 +146,64 @@ export async function scanAllEgx(limit = 200): Promise<EgxStock[]> {
   return (data.data ?? []).map(parseRow);
 }
 
-/** Check if EGX market is currently open (Sun-Thu, 10:00-14:30 Cairo) */
+/**
+ * Egyptian public holidays for EGX (dates are MM-DD, year-agnostic).
+ * Updated for recurrent annual holidays. Add one-off dates as "YYYY-MM-DD".
+ */
+const EGX_HOLIDAYS_ANNUAL: string[] = [
+  "01-07",  // Coptic Christmas
+  "04-25",  // Sinai Liberation Day
+  "05-01",  // Labour Day
+  "06-30",  // June 30 Revolution
+  "07-23",  // Revolution Day
+  "10-06",  // Armed Forces Day
+];
+
+// One-off dates (YYYY-MM-DD) — add manually when the exchange announces a closure
+const EGX_HOLIDAYS_ONEOFF: string[] = [
+  "2025-01-07",  // Coptic Christmas 2025
+  "2026-01-07",  // Coptic Christmas 2026
+  "2026-04-13",  // مثال: عيد شم النسيم ٢٠٢٦
+];
+
+/** Returns true if today is an Egyptian public holiday (Cairo time) */
+function isEgyptianHoliday(): boolean {
+  const cairo = new Date(new Date().toLocaleString("en-US", { timeZone: "Africa/Cairo" }));
+  const y = cairo.getFullYear();
+  const mm = String(cairo.getMonth() + 1).padStart(2, "0");
+  const dd = String(cairo.getDate()).padStart(2, "0");
+  const md = `${mm}-${dd}`;
+  const ymd = `${y}-${mm}-${dd}`;
+
+  return EGX_HOLIDAYS_ANNUAL.includes(md) || EGX_HOLIDAYS_ONEOFF.includes(ymd);
+}
+
+/** Check if EGX market is currently open (Sun-Thu, 10:00-14:30 Cairo, non-holiday) */
 export function isMarketOpen(): boolean {
+  if (isEgyptianHoliday()) return false;
   const cairo = new Date(new Date().toLocaleString("en-US", { timeZone: "Africa/Cairo" }));
   const day = cairo.getDay(); // 0=Sun, 6=Sat
   const h = cairo.getHours();
   const m = cairo.getMinutes();
   const minuteOfDay = h * 60 + m;
-
   const isWeekday = day >= 0 && day <= 4; // Sun=0 to Thu=4
   const isInSession = minuteOfDay >= 600 && minuteOfDay <= 870; // 10:00 to 14:30
   return isWeekday && isInSession;
+}
+
+/** Returns a human-readable market status string (in Arabic) */
+export function getMarketStatus(): { open: boolean; reason: string } {
+  if (isEgyptianHoliday()) return { open: false, reason: "السوق مغلق — إجازة رسمية" };
+  const cairo = new Date(new Date().toLocaleString("en-US", { timeZone: "Africa/Cairo" }));
+  const day = cairo.getDay();
+  const h = cairo.getHours();
+  const m = cairo.getMinutes();
+  const minuteOfDay = h * 60 + m;
+  if (day === 5) return { open: false, reason: "السوق مغلق — الجمعة" };
+  if (day === 6) return { open: false, reason: "السوق مغلق — السبت" };
+  if (minuteOfDay < 600) return { open: false, reason: "السوق لم يفتح بعد — يفتح الساعة ١٠:٠٠ ص" };
+  if (minuteOfDay > 870) return { open: false, reason: "جلسة التداول انتهت — تغلق الساعة ٢:٣٠ م" };
+  return { open: true, reason: "السوق مفتوح" };
 }
 
 /** Full EGX daily overview for the dashboard */
