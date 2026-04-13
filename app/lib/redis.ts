@@ -21,6 +21,11 @@ export const KEYS = {
   PRICE_HISTORY: "goldmine:prices",
   LAST_ADD_FUNDS_ALERT: "goldmine:last_add_funds",
   LAST_HOLDING_ALERT: "goldmine:last_holding_alert",
+  // EGX
+  EGX_ALERTS: "egx:alerts",                  // list of EgxAlert (history)
+  EGX_PORTFOLIO: "egx:portfolio",             // hash: symbol → EgxPosition
+  EGX_LAST_SCAN: "egx:last_scan",             // timestamp of last scan
+  EGX_STOCK_COOLDOWN: (sym: string) => `egx:cooldown:${sym}`, // per-stock cooldown
 } as const;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -128,3 +133,87 @@ export async function getPriceHistory(limit = 120): Promise<PricePoint[]> {
     .map((item) => (typeof item === "string" ? JSON.parse(item) : item))
     .reverse();
 }
+
+// ── EGX Portfolio & Alert types ───────────────────────────────────────────────
+
+export type EgxAlertAction = "BUY" | "SELL" | "WATCH";
+
+export interface EgxAlert {
+  id: string;
+  timestamp: string;
+  symbol: string;
+  name: string;
+  action: EgxAlertAction;
+  price: number;
+  change: number;
+  rsi: number | null;
+  score: number;
+  signal: string;
+  reason: string;
+}
+
+export interface EgxPosition {
+  symbol: string;
+  name: string;
+  alertedAt: string;       // ISO when we sent the BUY alert
+  alertPrice: number;      // price at the time of BUY alert
+  lastScore: number;
+  lastSignal: string;
+  lastCheckedAt: string;
+}
+
+// ── EGX helpers ───────────────────────────────────────────────────────────────
+
+/** Save a new alert to history (capped at 500) */
+export async function logEgxAlert(alert: Omit<EgxAlert, "id">): Promise<void> {
+  const r = getRedis();
+  const full: EgxAlert = {
+    ...alert,
+    id: `${Date.now()}-${alert.symbol}`,
+  };
+  await r.lpush(KEYS.EGX_ALERTS, JSON.stringify(full));
+  await r.ltrim(KEYS.EGX_ALERTS, 0, 499); // keep last 500 alerts
+}
+
+/** Get most recent EGX alerts */
+export async function getEgxAlerts(limit = 50): Promise<EgxAlert[]> {
+  const r = getRedis();
+  const raw = await r.lrange(KEYS.EGX_ALERTS, 0, limit - 1);
+  return raw.map(item => (typeof item === "string" ? JSON.parse(item) : item));
+}
+
+/** Save a stock position to portfolio (when we send a BUY alert) */
+export async function saveEgxPosition(pos: EgxPosition): Promise<void> {
+  await getRedis().hset(KEYS.EGX_PORTFOLIO, { [pos.symbol]: JSON.stringify(pos) });
+}
+
+/** Remove a stock from portfolio (when we send a SELL alert) */
+export async function removeEgxPosition(symbol: string): Promise<void> {
+  await getRedis().hdel(KEYS.EGX_PORTFOLIO, symbol);
+}
+
+/** Get all current EGX portfolio positions */
+export async function getEgxPortfolio(): Promise<EgxPosition[]> {
+  const r = getRedis();
+  const raw = await r.hgetall(KEYS.EGX_PORTFOLIO);
+  if (!raw) return [];
+  return Object.values(raw).map(v => (typeof v === "string" ? JSON.parse(v) : v));
+}
+
+/** Check if a stock is in the portfolio (BUY alert already sent) */
+export async function isInEgxPortfolio(symbol: string): Promise<boolean> {
+  const raw = await getRedis().hget<string>(KEYS.EGX_PORTFOLIO, symbol);
+  return raw !== null;
+}
+
+/** Set per-stock cooldown (to avoid spamming same alert twice) */
+export async function setEgxCooldown(symbol: string, ttlSeconds: number): Promise<void> {
+  await getRedis().set(KEYS.EGX_STOCK_COOLDOWN(symbol), "1", { ex: ttlSeconds });
+}
+
+/** Check if a stock is in cooldown */
+export async function isEgxOnCooldown(symbol: string): Promise<boolean> {
+  const val = await getRedis().get(KEYS.EGX_STOCK_COOLDOWN(symbol));
+  return val !== null;
+}
+

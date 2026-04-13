@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import dynamic from "next/dynamic";
 import {
   TrendingUp, TrendingDown, Activity, Wallet,
@@ -187,6 +188,17 @@ export default function DashboardPage() {
               {isError ? "Error" : isRunning ? "Running" : "Stopped"}
             </span>
           )}
+
+          {/* EGX link */}
+          <Link href="/egx" style={{ textDecoration: "none" }}>
+            <button
+              className="btn-ghost"
+              style={{ padding: "8px 12px", display: "flex", alignItems: "center", gap: 6 }}
+            >
+              <BarChart3 size={14} />
+              <span style={{ fontSize: 13 }}>البورصة</span>
+            </button>
+          </Link>
 
           {/* Refresh */}
           <button
