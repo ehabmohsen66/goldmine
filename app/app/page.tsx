@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 import {
   TrendingUp, TrendingDown, Activity, Wallet,
   BarChart3, RefreshCw, Play, Square, ChevronRight,
-  Zap, AlertTriangle, Clock, CheckCircle, RotateCcw,
+  Zap, AlertTriangle, Clock, CheckCircle, RotateCcw, Target,
 } from "lucide-react";
 
 const PriceChart = dynamic(() => import("@/components/PriceChart"), { ssr: false });
@@ -397,7 +397,27 @@ export default function DashboardPage() {
         <div className="glass-card" style={{ padding: "20px 24px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
             <p className="stat-label">Rolling Peak</p>
-            <BarChart3 size={16} color="var(--text-muted)" />
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <button
+                title="Reset peak to current price (use when peak is stale)"
+                onClick={async () => {
+                  setActionLoading(true);
+                  const res = await fetch("/api/bot/reset-peak", { method: "POST" });
+                  const d = await res.json();
+                  if (d.ok) setConfirmMsg(`🎯 Peak reset: ${d.oldPeak?.toFixed(2)} → ${d.newPeak?.toFixed(2)} EGP/g`);
+                  else setConfirmMsg("❌ " + d.error);
+                  await fetchStatus();
+                  setActionLoading(false);
+                  setTimeout(() => setConfirmMsg(null), 5000);
+                }}
+                disabled={actionLoading}
+                className="btn-ghost"
+                style={{ padding: "4px 8px", fontSize: 10, display: "flex", alignItems: "center", gap: 4 }}
+              >
+                <Target size={11} /> Reset
+              </button>
+              <BarChart3 size={16} color="var(--text-muted)" />
+            </div>
           </div>
           {loading ? <div className="skeleton" style={{ width: 130, height: 32 }} /> : (
             <p className="stat-value" style={{ color: "var(--text-primary)" }}>

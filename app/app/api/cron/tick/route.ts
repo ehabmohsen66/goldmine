@@ -212,6 +212,20 @@ export async function GET(request: Request) {
 
     // ── 5. WATCHING — DCA buy strategy ───────────────────────────────────────
     } else {
+      // Decay stale peak: if the peak was set more than 7 days ago with no trade,
+      // reset it to the current price. A frozen historical peak causes a permanently
+      // large "dip%" which either fires buy signals non-stop or masks real dips.
+      const lastTradeOrBoot = state.buy_time
+        ? new Date(state.buy_time).getTime()
+        : now - (8 * 24 * 3600 * 1000); // assume stale if no trade time recorded
+      const peakAgeMs = now - lastTradeOrBoot;
+      const PEAK_DECAY_MS = 7 * 24 * 3600 * 1000; // 7 days
+
+      if (state.peak_price !== null && peakAgeMs > PEAK_DECAY_MS) {
+        console.log(`[tick] Peak decayed — was ${state.peak_price.toFixed(2)}, resetting to ${price.toFixed(2)}`);
+        state.peak_price = price;
+      }
+
       if (state.peak_price === null || price > state.peak_price) {
         state.peak_price = price;
       }
