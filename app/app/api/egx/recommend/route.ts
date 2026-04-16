@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { scanAllEgx } from "@/lib/egx";
-import { getRedis } from "@/lib/redis";
+import { getRedis, saveEgxThndrPortfolio } from "@/lib/redis";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -19,12 +19,23 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const portfolio: { symbol: string; buyPrice: number; shares?: number }[] = body.portfolio || [];
+    const saveToProfile = body.save === true;
 
     if (!Array.isArray(portfolio) || portfolio.length === 0) {
       return NextResponse.json(
         { error: "Invalid portfolio format. Expected { portfolio: [{ symbol: 'COMI', buyPrice: 70, shares: 1000 }] }" },
         { status: 400 }
       );
+    }
+
+    if (saveToProfile) {
+      // Normalize shares properly before saving
+      const cleaned = portfolio.map(p => ({
+        symbol: p.symbol,
+        buyPrice: p.buyPrice,
+        shares: p.shares || 0
+      }));
+      await saveEgxThndrPortfolio(cleaned);
     }
 
     const r = getRedis();

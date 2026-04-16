@@ -14,10 +14,16 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { imageBase64 } = await req.json();
+    const body = await req.json();
+    let images: string[] = [];
+    if (body.imagesBase64 && Array.isArray(body.imagesBase64)) {
+      images = body.imagesBase64;
+    } else if (body.imageBase64) {
+      images = [body.imageBase64];
+    }
 
-    if (!imageBase64) {
-      return NextResponse.json({ error: "No image provided" }, { status: 400 });
+    if (images.length === 0) {
+      return NextResponse.json({ error: "No images provided" }, { status: 400 });
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
@@ -26,7 +32,12 @@ export async function POST(req: Request) {
     }
 
     // Clean up base64 string if it contains the data uri prefix
-    const base64Data = imageBase64.replace(/^data:image\/(png|jpeg|jpg);base64,/, "");
+    const imageParts = images.map((img) => ({
+      inline_data: {
+        mime_type: img.includes("image/png") ? "image/png" : "image/jpeg",
+        data: img.replace(/^data:image\/(png|jpeg|jpg);base64,/, ""),
+      },
+    }));
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
@@ -45,12 +56,7 @@ Example: [{"symbol": "COMI", "buyPrice": 75.5, "shares": 1000}]`;
         {
           parts: [
             { text: prompt },
-            {
-              inline_data: {
-                mime_type: "image/jpeg",
-                data: base64Data,
-              },
-            },
+            ...imageParts,
           ],
         },
       ],

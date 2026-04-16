@@ -58,6 +58,7 @@ interface EgxBriefResponse {
     totalScanned: number;
   } | null;
   portfolio: EgxPosition[];
+  thndrPortfolio?: { symbol: string; buyPrice: number; shares: number }[];
   alerts: EgxAlert[];
   marketStatus: { open: boolean; reason: string } | null;
   lastScan: string | null;
@@ -212,45 +213,73 @@ export default function EgxPage() {
   const [recommendations, setRecommendations] = useState<any[] | null>(null);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
 
     setAnalyzingImage(true);
     setAiError("");
     setRecommendations(null);
 
     try {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64String = reader.result as string;
-
-        // 1. Analyze with Gemini
-        const geminiRes = await fetch("/api/egx/analyze-screenshot", {
-          method: "POST", 
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageBase64: base64String }),
+      const base64s = await Promise.all(files.map(file => {
+        return new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
         });
-        if (!geminiRes.ok) throw new Error((await geminiRes.json())?.error || "Gemini API error");
-        const { portfolio } = await geminiRes.json();
+      }));
 
-        // 2. Feed to Recommendations logic
-        const recRes = await fetch("/api/egx/recommend", {
-          method: "POST", 
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ portfolio })
-        });
-        if (!recRes.ok) throw new Error((await recRes.json())?.error || "Recommendation API error");
-        const { recommendations } = await recRes.json();
+      // 1. Analyze with Gemini
+      const geminiRes = await fetch("/api/egx/analyze-screenshot", {
+        method: "POST", 
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imagesBase64: base64s }),
+      });
+      if (!geminiRes.ok) throw new Error((await geminiRes.json())?.error || "Gemini API error");
+      const { portfolio } = await geminiRes.json();
 
-        setRecommendations(recommendations);
-        setAnalyzingImage(false);
-      };
-      reader.readAsDataURL(file);
+      // Merge with existing thndrPortfolio so multiple uploads update the same profile
+      let mergedPortfolio = data?.thndrPortfolio ? [...data.thndrPortfolio] : [];
+      portfolio.forEach((newItem: any) => {
+        const existingIdx = mergedPortfolio.findIndex(p => p.symbol === newItem.symbol);
+        if (existingIdx !== -1) {
+           mergedPortfolio[existingIdx] = newItem;
+        } else {
+           mergedPortfolio.push(newItem);
+        }
+      });
+
+      // 2. Feed to Recommendations logic
+      const recRes = await fetch("/api/egx/recommend", {
+        method: "POST", 
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ portfolio: mergedPortfolio, save: true })
+      });
+      if (!recRes.ok) throw new Error((await recRes.json())?.error || "Recommendation API error");
+      const recData = await recRes.json();
+
+      setRecommendations(recData.recommendations);
+      setData(prev => prev ? { ...prev, thndrPortfolio: mergedPortfolio } : prev);
     } catch (err: any) {
       setAiError(err.message || String(err));
+    } finally {
       setAnalyzingImage(false);
     }
   };
+
+  useEffect(() => {
+    if (tab === "portfolio" && data?.thndrPortfolio && data.thndrPortfolio.length > 0 && !recommendations && !analyzingImage) {
+      setAnalyzingImage(true);
+      fetch("/api/egx/recommend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ portfolio: data.thndrPortfolio })
+      }).then(res => res.json()).then(res => {
+        if (res.recommendations) setRecommendations(res.recommendations);
+      }).catch(() => {}).finally(() => setAnalyzingImage(false));
+    }
+  }, [tab, data?.thndrPortfolio, recommendations, analyzingImage]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -452,7 +481,7 @@ export default function EgxPage() {
                  background: "rgba(168,85,247,0.05)", color: "#A855F7", cursor: "pointer",
                  transition: "all 0.2s", fontWeight: 600, fontSize: 13
                }}>
-                 <input type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageUpload} disabled={analyzingImage} />
+                 <input type="file" multiple accept="image/*" style={{ display: "none" }} onChange={handleImageUpload} disabled={analyzingImage} />
                  {analyzingImage ? (
                     <><span className="pulse-dot" style={{ background: "#A855F7" }} /> جاري تحليل الصورة واستخراج التوصيات...</>
                  ) : (

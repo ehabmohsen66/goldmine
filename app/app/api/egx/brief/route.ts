@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getEgxDailyBrief, getMarketStatus } from "@/lib/egx";
-import { getEgxAlerts, getEgxPortfolio, getRedis } from "@/lib/redis";
+import { getEgxAlerts, getEgxPortfolio, getEgxThndrPortfolio, getRedis } from "@/lib/redis";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -31,16 +31,18 @@ export async function GET() {
     }
 
     // Fetch portfolio + alert history in parallel
-    const [portfolio, alerts, lastScan] = await Promise.all([
+    const [portfolio, alerts, lastScan, thndrPortfolio] = await Promise.all([
       getEgxPortfolio(),
       getEgxAlerts(50),
       r.get<string>("egx:last_scan"),
+      getEgxThndrPortfolio(),
     ]);
 
     return NextResponse.json({
       overview,
       portfolio,
       alerts,
+      thndrPortfolio,
       marketStatus: getMarketStatus(),
       lastScan: lastScan ? new Date(parseInt(lastScan)).toISOString() : null,
       cachedAt: cached?.ts ?? Date.now(),
@@ -49,8 +51,8 @@ export async function GET() {
     // Return stale data on error
     try {
       const stale = await r.get<{ data: unknown; ts: number }>(CACHE_KEY);
-      const [portfolio, alerts] = await Promise.all([getEgxPortfolio(), getEgxAlerts(50)]);
-      if (stale) return NextResponse.json({ overview: stale.data, portfolio, alerts, stale: true });
+      const [portfolio, alerts, thndrPortfolio] = await Promise.all([getEgxPortfolio(), getEgxAlerts(50), getEgxThndrPortfolio()]);
+      if (stale) return NextResponse.json({ overview: stale.data, portfolio, alerts, thndrPortfolio, stale: true });
     } catch { /* ignore */ }
 
     return NextResponse.json({ error: String(err) }, { status: 500 });

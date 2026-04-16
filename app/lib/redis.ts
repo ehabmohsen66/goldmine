@@ -24,6 +24,7 @@ export const KEYS = {
   // EGX
   EGX_ALERTS: "egx:alerts",                  // list of EgxAlert (history)
   EGX_PORTFOLIO: "egx:portfolio",             // hash: symbol → EgxPosition
+  EGX_THNDR_PORTFOLIO: "egx:thndr_portfolio", // JSON list of Thndr position
   EGX_LAST_SCAN: "egx:last_scan",             // timestamp of last scan
   EGX_STOCK_COOLDOWN: (sym: string) => `egx:cooldown:${sym}`, // per-stock cooldown
 } as const;
@@ -215,5 +216,27 @@ export async function setEgxCooldown(symbol: string, ttlSeconds: number): Promis
 export async function isEgxOnCooldown(symbol: string): Promise<boolean> {
   const val = await getRedis().get(KEYS.EGX_STOCK_COOLDOWN(symbol));
   return val !== null;
+}
+
+export interface ThndrPosition {
+  symbol: string;
+  buyPrice: number;
+  shares: number;
+}
+
+/** Save Thndr portfolio */
+export async function saveEgxThndrPortfolio(portfolio: ThndrPosition[]): Promise<void> {
+  await getRedis().set(KEYS.EGX_THNDR_PORTFOLIO, JSON.stringify(portfolio));
+}
+
+/** Get Thndr portfolio */
+export async function getEgxThndrPortfolio(): Promise<ThndrPosition[]> {
+  const r = await getRedis().get<string>(KEYS.EGX_THNDR_PORTFOLIO);
+  if (!r) return [];
+  try {
+    return typeof r === 'string' ? JSON.parse(r) : r;
+  } catch {
+    return [];
+  }
 }
 
