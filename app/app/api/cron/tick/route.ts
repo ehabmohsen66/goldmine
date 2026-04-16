@@ -157,12 +157,36 @@ export async function GET(request: Request) {
 
     // ── 3. Market analysis ───────────────────────────────────────────────────
     const history = await getPriceHistory(120);
+    const priceHistoryWithNow = [...(history ?? []), { t: now, p: price }];
     const signal  = analyzeMarket(
-      [...(history ?? []), { t: now, p: price }],
+      priceHistoryWithNow,
       BASE_DIP_PCT,
       BASE_TRAIL_PCT
     );
     const { adaptiveDipPct, adaptiveTrailPct } = signal;
+
+    // ── 3.5 Kronos Future Forecasting ────────────────────────────────────────
+    let kronosForecast: any[] | null = null;
+    const KRONOS_API_URL = process.env.KRONOS_API_URL;
+    if (KRONOS_API_URL && priceHistoryWithNow.length > 30) {
+      try {
+        const candles = priceHistoryWithNow.map(h => ({
+           open: h.p, high: h.p, low: h.p, close: h.p, volume: 1, amount: h.p, 
+           timestamp: new Date(h.t).toISOString()
+        }));
+        const reqBody = { symbol: "GOLD_EGP", candles, lookback: 120, pred_len: 60, freq: "1min" };
+        const kRes = await fetch(`${KRONOS_API_URL}/predict`, {
+           method: "POST", headers: { "Content-Type": "application/json" },
+           body: JSON.stringify(reqBody)
+        });
+        if (kRes.ok) {
+           const kData = await kRes.json();
+           kronosForecast = kData.forecast;
+        }
+      } catch (err) {
+        console.error("[Kronos API error]:", err);
+      }
+    }
 
     // ── 4. IN POSITION — trailing stop + strong sell signal ──────────────────
     if (state.in_position && state.buy_price !== null && state.grams_held !== null) {
@@ -233,16 +257,28 @@ export async function GET(request: Request) {
       const dipPct = ((state.peak_price - price) / state.peak_price) * 100;
 
       // Level 1 dip: buy first tranche
-      const level1Hit = dipPct >= adaptiveDipPct && state.dca_level === 0;
+      let level1Hit = dipPct >= adaptiveDipPct && state.dca_level === 0;
       // Level 2 dip: buy second tranche (dip is 2x deeper)
-      const level2Hit = dipPct >= adaptiveDipPct * 2 && state.dca_level === 1;
+      let level2Hit = dipPct >= adaptiveDipPct * 2 && state.dca_level === 1;
       // Level 3 dip: buy remaining reserve
-      const level3Hit = dipPct >= adaptiveDipPct * 3 && state.dca_level === 2;
+      let level3Hit = dipPct >= adaptiveDipPct * 3 && state.dca_level === 2;
       // Strong RSI oversold — buy immediately regardless
-      const rsiOverride = signal.action === "BUY_STRONG" && state.dca_level === 0;
+      let rsiOverride = signal.action === "BUY_STRONG" && state.dca_level === 0;
 
       // Smart Momentum Ride: if the market is trending up strongly and RSI is healthy, get in!
-      const momentumRide = signal.momentumBuy && state.dca_level === 0;
+      let momentumRide = signal.momentumBuy && state.dca_level === 0;
+
+      // Kronos Future Guard
+      if (kronosForecast && kronosForecast.length > 0 && (level1Hit || level2Hit || level3Hit || rsiOverride || momentumRide)) {
+          const forecastedDrop = Math.min(...kronosForecast.map(f => f.close));
+          const expectedDropPct = ((price - forecastedDrop) / price) * 100;
+          
+          // If Kronos predicts future dip exceeds our adaptivedip threshold by a significant margin (1.5x)
+          if (expectedDropPct > adaptiveDipPct * 1.5) {
+               console.log(`[tick] Kronos predicts a deeper dip of ${expectedDropPct.toFixed(2)}%. Pausing DCA buys.`);
+               level1Hit = false; level2Hit = false; level3Hit = false; rsiOverride = false; momentumRide = false;
+          }
+      }
 
       const shouldBuy = level1Hit || level2Hit || level3Hit || rsiOverride || momentumRide;
 
