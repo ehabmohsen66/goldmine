@@ -40,4 +40,4 @@ RUN npm run build
 ENV NODE_ENV=production
 EXPOSE 3000
 
-CMD node node_modules/.bin/next start -p ${PORT:-3000}
+CMD ["npm", "start"]
