@@ -1,0 +1,11 @@
+# nixpacks.toml for Kronos Python engine
+# Railway will use this to build the FastAPI service
+
+[phases.setup]
+nixPkgs = ["python312", "python312Packages.pip"]
+
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
+
+[start]
+cmd = "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"
