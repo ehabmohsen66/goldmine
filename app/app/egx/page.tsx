@@ -5,8 +5,12 @@ import Link from "next/link";
 import {
   TrendingUp, TrendingDown, RefreshCw, BarChart3,
   Activity, AlertTriangle, ChevronLeft, Zap, Clock,
-  ArrowUpRight, ArrowDownRight, Briefcase, Bell,
+  ArrowUpRight, ArrowDownRight, Briefcase, Bell, BrainCircuit, X
 } from "lucide-react";
+import dynamic from "next/dynamic";
+
+const Chart = dynamic(() => import("react-apexcharts"), { ssr: false });
+
 
 
 interface EgxStock {
@@ -90,37 +94,52 @@ function timeSince(iso: string): string {
   return `${Math.floor(secs / 86400)}ي`;
 }
 
-function StockRow({ stock }: { stock: EgxStock }) {
+function StockRow({ stock, onPredict }: { stock: EgxStock, onPredict?: (sym: string) => void }) {
   const isPos = stock.change >= 0;
   return (
     <div style={{
-      display: "grid", gridTemplateColumns: "1fr auto auto auto",
-      gap: 10, alignItems: "center",
+      display: "flex", justifyContent: "space-between", alignItems: "center",
       padding: "10px 14px", borderRadius: 10,
-      background: "rgba(255,255,255,0.02)",
-      border: "1px solid rgba(255,255,255,0.05)", marginBottom: 6,
+      background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)",
+      marginBottom: 6,
     }}>
       <div>
-        <p style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>{stock.symbol}</p>
-        <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 1, maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{stock.name}</p>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <p style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>{stock.symbol}</p>
+          <span style={{ fontSize: 12, fontWeight: 700, color: isPos ? "#22C55E" : "#EF4444", display: "flex", alignItems: "center", gap: 2 }}>
+            {isPos ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
+            {isPos ? "+" : ""}{stock.change.toFixed(2)}%
+          </span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+          {stock.rsi !== null && (
+            <span style={{ fontSize: 11, color: stock.rsi < 30 ? "#22C55E" : stock.rsi > 70 ? "#EF4444" : "var(--text-muted)" }}>
+              RSI {stock.rsi.toFixed(0)}
+            </span>
+          )}
+        </div>
       </div>
-      {stock.rsi !== null && (
-        <span style={{ fontSize: 11, color: stock.rsi < 30 ? "#22C55E" : stock.rsi > 70 ? "#EF4444" : "var(--text-muted)" }}>
-          RSI {stock.rsi.toFixed(0)}
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        {onPredict && (
+          <button
+            onClick={() => onPredict(stock.symbol)}
+            style={{
+              background: "rgba(99,102,241,0.15)", color: "#818cf8", border: "1px solid rgba(99,102,241,0.3)",
+              padding: "4px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, display: "flex", alignItems: "center", gap: 4, cursor: "pointer"
+            }}
+          >
+            <BrainCircuit size={12} /> AI Forecast
+          </button>
+        )}
+        <span style={{
+          fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 5, minWidth: 50, textAlign: "center",
+          background: `${signalColor(stock.signal)}22`,
+          border: `1px solid ${signalColor(stock.signal)}44`,
+          color: signalColor(stock.signal), whiteSpace: "nowrap",
+        }}>
+          {stock.signal.replace("_", " ")}
         </span>
-      )}
-      <span style={{ fontSize: 12, fontWeight: 700, color: isPos ? "#22C55E" : "#EF4444", display: "flex", alignItems: "center", gap: 2 }}>
-        {isPos ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
-        {isPos ? "+" : ""}{stock.change.toFixed(2)}%
-      </span>
-      <span style={{
-        fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 5,
-        background: `${signalColor(stock.signal)}22`,
-        border: `1px solid ${signalColor(stock.signal)}44`,
-        color: signalColor(stock.signal), whiteSpace: "nowrap",
-      }}>
-        {stock.signal.replace("_", " ")}
-      </span>
+      </div>
     </div>
   );
 }
@@ -211,6 +230,34 @@ export default function EgxPage() {
   const [analyzingImage, setAnalyzingImage] = useState(false);
   const [aiError, setAiError] = useState("");
   const [recommendations, setRecommendations] = useState<any[] | null>(null);
+
+  // Kronos UI State
+  const [kronosSymbol, setKronosSymbol] = useState<string | null>(null);
+  const [kronosLoading, setKronosLoading] = useState(false);
+  const [kronosData, setKronosData] = useState<any | null>(null);
+
+  const predictKronos = async (symbol: string) => {
+    setKronosSymbol(symbol);
+    setKronosLoading(true);
+    setKronosData(null);
+    try {
+      const res = await fetch("/api/egx/forecast", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbol })
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const resData = await res.json();
+      if (resData.forecast) {
+        setKronosData(resData);
+      } else {
+        throw new Error(resData.error || "No forecast returned");
+      }
+    } catch (e: any) {
+      alert("Kronos Error: " + (e.message || e));
+      setKronosSymbol(null);
+    }
+    setKronosLoading(false);
+  };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -420,7 +467,7 @@ export default function EgxPage() {
               <h2 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>أقوى إشارات الشراء</h2>
             </div>
             {loading ? [...Array(4)].map((_, i) => <div key={i} className="skeleton" style={{ height: 52, borderRadius: 10, marginBottom: 6 }} />) :
-              ov?.topBuys.length ? ov.topBuys.map(s => <StockRow key={s.symbol} stock={s} />) :
+              ov?.topBuys.length ? ov.topBuys.map(s => <StockRow key={s.symbol} stock={s} onPredict={predictKronos} />) :
               <p style={{ color: "var(--text-muted)", fontSize: 13 }}>لا توجد إشارات شراء حالياً</p>}
           </div>
 
@@ -431,7 +478,7 @@ export default function EgxPage() {
             </div>
             <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 10 }}>RSI {"<"} 35 · ارتداد محتمل</p>
             {loading ? [...Array(3)].map((_, i) => <div key={i} className="skeleton" style={{ height: 52, borderRadius: 10, marginBottom: 6 }} />) :
-              ov?.watchlist.length ? ov.watchlist.map(s => <StockRow key={s.symbol} stock={s} />) :
+              ov?.watchlist.length ? ov.watchlist.map(s => <StockRow key={s.symbol} stock={s} onPredict={predictKronos} />) :
               <p style={{ color: "var(--text-muted)", fontSize: 13 }}>لا توجد أسهم ذات RSI منخفض</p>}
           </div>
 
@@ -441,7 +488,7 @@ export default function EgxPage() {
               <h2 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>الأكثر ارتفاعاً</h2>
             </div>
             {loading ? [...Array(3)].map((_, i) => <div key={i} className="skeleton" style={{ height: 52, borderRadius: 10, marginBottom: 6 }} />) :
-              ov?.topGainers.length ? ov.topGainers.map(s => <StockRow key={s.symbol} stock={s} />) :
+              ov?.topGainers.length ? ov.topGainers.map(s => <StockRow key={s.symbol} stock={s} onPredict={predictKronos} />) :
               <p style={{ color: "var(--text-muted)", fontSize: 13 }}>لا توجد بيانات</p>}
           </div>
 
@@ -451,7 +498,7 @@ export default function EgxPage() {
               <h2 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>الأكثر انخفاضاً</h2>
             </div>
             {loading ? [...Array(3)].map((_, i) => <div key={i} className="skeleton" style={{ height: 52, borderRadius: 10, marginBottom: 6 }} />) :
-              ov?.topLosers.length ? ov.topLosers.map(s => <StockRow key={s.symbol} stock={s} />) :
+              ov?.topLosers.length ? ov.topLosers.map(s => <StockRow key={s.symbol} stock={s} onPredict={predictKronos} />) :
               <p style={{ color: "var(--text-muted)", fontSize: 13 }}>لا توجد بيانات</p>}
           </div>
         </div>
@@ -627,6 +674,86 @@ export default function EgxPage() {
           تنبيهات تلقائية كل 30 دقيقة · الأحد–الخميس 10:00–14:30 · TradingView
         </p>
       </div>
+
+      {kronosSymbol && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0,0,0,0.8)", zIndex: 1000,
+          display: "flex", justifyContent: "center", alignItems: "center", padding: 20
+        }}>
+          <div style={{
+            background: "#111", border: "1px solid rgba(99,102,241,0.3)",
+            borderRadius: 16, padding: 24, width: "100%", maxWidth: 600,
+            boxShadow: "0 20px 40px rgba(0,0,0,0.5), 0 0 40px rgba(99,102,241,0.1) inset"
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
+              <div>
+                <h3 style={{ fontSize: 18, fontWeight: 700, color: "#818cf8", display: "flex", alignItems: "center", gap: 8 }}>
+                  <BrainCircuit size={18} /> مسار الذكاء الاصطناعي (Kronos-AI)
+                </h3>
+                <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+                  {kronosSymbol} · توقعات {kronosData ? "120 يوم" : "..."}
+                </p>
+              </div>
+              <button 
+                onClick={() => setKronosSymbol(null)}
+                style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer" }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {kronosLoading && (
+               <div style={{ padding: "40px 0", textAlign: "center" }}>
+                 <div className="skeleton" style={{ width: 60, height: 60, borderRadius: "50%", margin: "0 auto 16px" }} />
+                 <p style={{ color: "#818cf8", fontWeight: 600 }}>جاري تحليل البيانات التاريخية...</p>
+                 <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>يتم الآن معالجة 400 شمعة عبر نموذج Kronos</p>
+               </div>
+            )}
+
+            {!kronosLoading && kronosData?.forecast && (
+               <>
+                 <div style={{ display: "flex", gap: 10, margin: "10px 0 20px" }}>
+                    <div style={{ flex: 1, background: "rgba(255,255,255,0.03)", padding: "12px", borderRadius: 10, textAlign: "center" }}>
+                       <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>السعر الحالي</p>
+                       <p style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)" }}>{kronosData.currentPrice.toFixed(2)} EGP</p>
+                    </div>
+                    {(() => {
+                       const lastPred = kronosData.forecast[kronosData.forecast.length - 1].close;
+                       const pct = ((lastPred - kronosData.currentPrice) / kronosData.currentPrice) * 100;
+                       return (
+                         <div style={{ flex: 1, background: "rgba(255,255,255,0.03)", padding: "12px", borderRadius: 10, textAlign: "center" }}>
+                            <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>الهدف (120D)</p>
+                            <p style={{ fontSize: 16, fontWeight: 700, color: pct >= 0 ? "#22C55E" : "#EF4444" }}>
+                               {lastPred.toFixed(2)} EGP <span style={{ fontSize: 12 }}>({pct > 0 ? "+" : ""}{pct.toFixed(2)}%)</span>
+                            </p>
+                         </div>
+                       );
+                    })()}
+                 </div>
+                 <div style={{ margin: "0 -10px" }}>
+                   <Chart
+                      options={{
+                        chart: { type: "area", animations: { enabled: false }, toolbar: { show: false }, background: "transparent" },
+                        colors: ["#818cf8"], fill: { type: "gradient", gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0, stops: [0, 100] } },
+                        dataLabels: { enabled: false }, stroke: { curve: "smooth", width: 2 },
+                        xaxis: { type: "datetime", labels: { style: { colors: "#666" } }, axisBorder: { show: false }, axisTicks: { show: false } },
+                        yaxis: { labels: { formatter: (v: number) => v.toFixed(2), style: { colors: "#666" } } },
+                        grid: { borderColor: "rgba(255,255,255,0.05)", strokeDashArray: 4 },
+                        theme: { mode: "dark" },
+                        tooltip: { x: { format: "dd MMM yyyy" }, theme: "dark" }
+                      }}
+                      series={[{ name: "Predicted Price", data: kronosData.forecast.map((f: any) => [new Date(f.timestamp).getTime(), f.close]) }]}
+                      type="area"
+                      height={250}
+                   />
+                 </div>
+               </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
+
   );
 }
