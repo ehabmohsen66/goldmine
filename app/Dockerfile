@@ -27,7 +27,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Install dependencies
@@ -38,6 +37,7 @@ RUN npm install
 COPY . .
 RUN npm run build
 
+ENV NODE_ENV=production
 EXPOSE 3000
 
 CMD node node_modules/.bin/next start -p ${PORT:-3000}
