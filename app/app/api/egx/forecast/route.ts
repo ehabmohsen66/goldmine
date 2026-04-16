@@ -13,7 +13,7 @@ export async function POST(req: Request) {
 
     const yRes = await fetch(yUrl, {
       headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
-    });
+    }).catch(e => { throw new Error(`Yahoo API error for ${yahooSymbol}: ${e.message}`); });
     
     if (!yRes.ok) throw new Error("Yahoo fetch failed");
     const data = await yRes.json();
@@ -56,7 +56,7 @@ export async function POST(req: Request) {
            freq: "1D",    // daily interval
            candles: candles
         })
-    });
+    }).catch(e => { throw new Error(`Kronos Network Error (${kronosUrl}): ${e.message}. Is the Engine Online?`); });
 
     if (!kReq.ok) {
         throw new Error(`Kronos engine failed: ${await kReq.text()}`);
