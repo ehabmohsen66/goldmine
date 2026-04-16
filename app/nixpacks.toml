@@ -1,0 +1,41 @@
+# nixpacks.toml — System dependencies for Playwright Chromium on Railway
+# These are Nix packages, not apt packages, so they work in Railway's build sandbox
+
+[phases.setup]
+nixPkgs = [
+  "nodejs_22",
+  "nss",
+  "nspr",
+  "atk",
+  "cups",
+  "drm",
+  "xorg.libX11",
+  "xorg.libXcomposite",
+  "xorg.libXdamage",
+  "xorg.libXext",
+  "xorg.libXfixes",
+  "xorg.libXrandr",
+  "xorg.libxcb",
+  "mesa",
+  "libxkbcommon",
+  "pango",
+  "cairo",
+  "alsa-lib",
+  "at-spi2-atk",
+  "at-spi2-core",
+  "expat",
+  "glib",
+  "dbus",
+  "libgbm",
+  "udev",
+]
+
+[phases.install]
+cmds = [
+  "npm install",
+  "PLAYWRIGHT_BROWSERS_PATH=/app/pw-browsers npx playwright install chromium",
+  "npm run build"
+]
+
+[start]
+cmd = "next start -p ${PORT:-3000}"
