@@ -39,7 +39,7 @@ export async function POST(req: Request) {
       },
     }));
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
     const prompt = `You are a financial OCR assistant. I am giving you a screenshot of my stock portfolio from the Thndr app or another Egyptian stock broker. 
 Your task is to extract all the stocks I own. For each stock, extract:
