@@ -44,18 +44,23 @@ async function getChromium() {
 async function launchBrowser() {
   const { chromium } = await import("playwright-core");
 
-  // ── Railway / persistent server: PLAYWRIGHT_BROWSERS_PATH is set → use playwright's Chromium ──
-  if (process.env.PLAYWRIGHT_BROWSERS_PATH || process.env.CHROMIUM_PATH) {
-    const executablePath = process.env.CHROMIUM_PATH ?? chromium.executablePath();
-    console.log(`[scraper] Launching Chromium from: ${executablePath}`);
-    return chromium.launch({ executablePath, args: CHROMIUM_ARGS, headless: true });
+  // ── Explicit override: CHROMIUM_PATH points to a pre-installed binary ────────
+  if (process.env.CHROMIUM_PATH) {
+    console.log(`[scraper] Using CHROMIUM_PATH: ${process.env.CHROMIUM_PATH}`);
+    return chromium.launch({ executablePath: process.env.CHROMIUM_PATH, args: CHROMIUM_ARGS, headless: true });
   }
 
-  // ── Vercel / Lambda: use sparticuz chromium-min ────────────────────────────
+  // ── Railway / any container: always use @sparticuz/chromium-min ─────────────
+  // sparticuz bundles its own libs (libnss3, libgbm etc.) so no system deps needed.
+  // SPARTICUZ_CHROMIUM_PATH can be pre-set via env var to avoid CDN download on every cold start.
   const sparticuz = (await import("@sparticuz/chromium-min")).default;
-  const execPath = await sparticuz.executablePath(
-    "https://github.com/Sparticuz/chromium/releases/download/v133.0.0/chromium-v133.0.0-pack.tar"
-  );
+  const localPath = process.env.SPARTICUZ_CHROMIUM_PATH;
+  const execPath = localPath
+    ? localPath
+    : await sparticuz.executablePath(
+        "https://github.com/Sparticuz/chromium/releases/download/v133.0.0/chromium-v133.0.0-pack.tar"
+      );
+  console.log(`[scraper] Launching sparticuz Chromium from: ${execPath}`);
   return chromium.launch({ args: CHROMIUM_ARGS, executablePath: execPath, headless: true });
 }
 
