@@ -39,6 +39,5 @@ COPY . .
 RUN npm run build
 
 EXPOSE 3000
-ENV PORT=3000
 
-CMD ["node", "node_modules/.bin/next", "start", "-p", "3000"]
+CMD node node_modules/.bin/next start -p ${PORT:-3000}
