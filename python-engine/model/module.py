@@ -301,10 +301,16 @@ class RotaryPositionalEmbedding(nn.Module):
         return self.cos_cached, self.sin_cached
 
     def forward(self, q, k):
-        cos, sin = self._update_cos_sin_cache(q, q.shape[-2])
+        # Build cache for the maximum of q/k lengths, then slice to each
+        max_len = max(q.shape[-2], k.shape[-2])
+        cos, sin = self._update_cos_sin_cache(q, max_len)
+        cos_q = cos[:, :, :q.shape[-2], :]
+        sin_q = sin[:, :, :q.shape[-2], :]
+        cos_k = cos[:, :, :k.shape[-2], :]
+        sin_k = sin[:, :, :k.shape[-2], :]
         return (
-            (q * cos) + (self._rotate_half(q) * sin),
-            (k * cos) + (self._rotate_half(k) * sin),
+            (q * cos_q) + (self._rotate_half(q) * sin_q),
+            (k * cos_k) + (self._rotate_half(k) * sin_k),
         )
 
     def _rotate_half(self, x):
