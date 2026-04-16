@@ -73,11 +73,11 @@ def predict(request: PredictRequest):
         # Generate future timestamps
         # Use simple date range matching the provided frequency (e.g. 15min)
         # pandas date_range requires standard offset format like '15T', '1D'
-        y_timestamp = pd.date_range(
+        y_timestamp = pd.Series(pd.date_range(
             start=x_timestamp.iloc[-1], 
             periods=request.pred_len + 1, 
             freq=request.freq
-        )[1:]
+        )[1:])
         
         pred_df = predictor.predict(
             df=x_df,
