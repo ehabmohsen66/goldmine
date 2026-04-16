@@ -4,3 +4,5 @@ pandas
 torch
 transformers
 huggingface-hub
+einops
+tqdm

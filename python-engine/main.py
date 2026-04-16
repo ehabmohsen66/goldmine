@@ -6,21 +6,28 @@ import os
 
 app = FastAPI()
 
-# Only load model if we are executing within Python context that supports it
-# (Railway will install requirements, but let's make it robust so build steps won't crash)
+# Initialize predictor as None — updated after model load attempt
+predictor = None
+
+# Load Kronos model (catches any import or runtime error gracefully)
 try:
     from model import Kronos, KronosTokenizer, KronosPredictor
     import torch
-    
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Loading Kronos on {device}...")
     tokenizer = KronosTokenizer.from_pretrained("NeoQuasar/Kronos-Tokenizer-base")
     _model = Kronos.from_pretrained("NeoQuasar/Kronos-base").to(device)
     predictor = KronosPredictor(_model, tokenizer, max_context=512)
     print("Kronos loaded successfully.")
-except ImportError:
+except Exception as e:
     predictor = None
-    print("Warning: Kronos dependencies not installed. Predictor disabled.")
+    print(f"Warning: Kronos model could not be loaded: {e}")
+
+@app.get("/")
+def health():
+    return {"status": "ok", "model": "kronos-base", "predictor_ready": predictor is not None}
+
 
 class Candle(BaseModel):
     open: float
