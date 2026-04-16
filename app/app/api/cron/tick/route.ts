@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   getState, saveState, isBotEnabled,
   logTrade, appendPrice, getRedis, KEYS, getPriceHistory,
+  saveKronosForecast,
   type BotState,
 } from "@/lib/redis";
 import { getGoldPrice, loginAndGetPortfolio } from "@/lib/scraper";
@@ -182,6 +183,21 @@ export async function GET(request: Request) {
         if (kRes.ok) {
            const kData = await kRes.json();
            kronosForecast = kData.forecast;
+           // Persist forecast to Redis for dashboard visibility
+           if (kronosForecast && kronosForecast.length > 0) {
+             const closes = kronosForecast.map((f: any) => f.close as number);
+             await saveKronosForecast({
+               symbol: "GOLD_EGP",
+               fetchedAt: new Date().toISOString(),
+               currentPrice: price,
+               forecast: kronosForecast,
+               predictedHigh: Math.max(...closes),
+               predictedLow: Math.min(...closes),
+               predictedChangePercent: ((closes[closes.length - 1] - price) / price) * 100,
+               buySuppressed: false, // will be updated below if suppressed
+               engineOnline: true,
+             });
+           }
         }
       } catch (err) {
         console.error("[Kronos API error]:", err);

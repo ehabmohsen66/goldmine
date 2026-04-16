@@ -27,7 +27,35 @@ export const KEYS = {
   EGX_THNDR_PORTFOLIO: "egx:thndr_portfolio", // JSON list of Thndr position
   EGX_LAST_SCAN: "egx:last_scan",             // timestamp of last scan
   EGX_STOCK_COOLDOWN: (sym: string) => `egx:cooldown:${sym}`, // per-stock cooldown
+  // Kronos
+  KRONOS_FORECAST: "kronos:last_forecast",    // last AI forecast result
 } as const;
+
+// ── Kronos ───────────────────────────────────────────────────────────────────
+export interface KronosForecastEntry {
+  symbol: string;
+  fetchedAt: string;        // ISO timestamp when fetched
+  currentPrice: number;
+  forecast: Array<{ timestamp: string; close: number; open: number; high: number; low: number }>;
+  predictedHigh: number;
+  predictedLow: number;
+  predictedChangePercent: number; // relative to currentPrice
+  buySuppressed: boolean;         // true = kronos paused the bot's DCA buy
+  engineOnline: boolean;
+}
+
+export async function getKronosForecast(): Promise<KronosForecastEntry | null> {
+  const r = getRedis();
+  const raw = await r.get<string>(KEYS.KRONOS_FORECAST);
+  if (!raw) return null;
+  try { return typeof raw === "string" ? JSON.parse(raw) : raw as KronosForecastEntry; }
+  catch { return null; }
+}
+
+export async function saveKronosForecast(entry: KronosForecastEntry): Promise<void> {
+  const r = getRedis();
+  await r.set(KEYS.KRONOS_FORECAST, JSON.stringify(entry), { ex: 60 * 60 * 6 }); // 6hr TTL
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface BotState {

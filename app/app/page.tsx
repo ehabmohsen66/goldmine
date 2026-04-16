@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 import {
   TrendingUp, TrendingDown, Activity, Wallet,
   BarChart3, RefreshCw, Play, Square, ChevronRight,
-  Zap, AlertTriangle, Clock, CheckCircle, RotateCcw, Target,
+  Zap, AlertTriangle, Clock, CheckCircle, RotateCcw, Target, Brain,
 } from "lucide-react";
 
 const PriceChart = dynamic(() => import("@/components/PriceChart"), { ssr: false });
@@ -48,6 +48,7 @@ export default function DashboardPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [trades, setTrades] = useState<unknown[]>([]);
   const [confirmMsg, setConfirmMsg] = useState<string | null>(null);
+  const [kronos, setKronos] = useState<any>(null);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -67,12 +68,20 @@ export default function DashboardPage() {
     } catch { /* silent */ }
   }, []);
 
+  const fetchKronos = useCallback(async () => {
+    try {
+      const res = await fetch("/api/kronos/status");
+      if (res.ok) setKronos(await res.json());
+    } catch { /* silent */ }
+  }, []);
+
   useEffect(() => {
     fetchStatus();
     fetchTrades();
-    const interval = setInterval(() => { fetchStatus(); fetchTrades(); }, 30000);
+    fetchKronos();
+    const interval = setInterval(() => { fetchStatus(); fetchTrades(); fetchKronos(); }, 30000);
     return () => clearInterval(interval);
-  }, [fetchStatus, fetchTrades]);
+  }, [fetchStatus, fetchTrades, fetchKronos]);
 
   const handleStart = async () => {
     setActionLoading(true);
@@ -446,6 +455,138 @@ export default function DashboardPage() {
             data={state?.price_history ?? []}
             buyPrice={state?.buy_price ?? undefined}
           />
+        )}
+      </div>
+
+      {/* ── Kronos AI Forecast Panel ────────────────────────────────────────── */}
+      <div className="glass-card" style={{ padding: "24px", marginBottom: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: 10,
+              background: kronos?.engineOnline
+                ? "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)"
+                : "rgba(255,255,255,0.05)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: kronos?.engineOnline ? "0 0 14px rgba(99,102,241,0.5)" : "none",
+            }}>
+              <Brain size={16} color={kronos?.engineOnline ? "#fff" : "#666"} />
+            </div>
+            <div>
+              <h2 style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)" }}>Kronos AI Forecast</h2>
+              <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 1 }}>Foundation model · next 60 min gold trajectory</p>
+            </div>
+          </div>
+          {/* Engine status badge */}
+          <span style={{
+            padding: "4px 12px", borderRadius: 20, fontSize: 11, fontWeight: 600,
+            background: kronos?.engineOnline
+              ? "rgba(99,102,241,0.15)" : "rgba(255,255,255,0.05)",
+            color: kronos?.engineOnline ? "#818cf8" : "#555",
+            border: `1px solid ${kronos?.engineOnline ? "rgba(99,102,241,0.3)" : "rgba(255,255,255,0.08)"}`,
+          }}>
+            {kronos?.kronosApiConfigured
+              ? (kronos?.engineOnline ? "🟣 Engine Online" : "⚪ No Recent Prediction")
+              : "⚙️ Engine Not Configured"}
+          </span>
+        </div>
+
+        {!kronos?.kronosApiConfigured && (
+          <div style={{
+            padding: "16px 20px", borderRadius: 12,
+            background: "rgba(99,102,241,0.06)", border: "1px solid rgba(99,102,241,0.15)",
+            marginBottom: 16,
+          }}>
+            <p style={{ fontSize: 13, color: "#818cf8", lineHeight: 1.6 }}>
+              <b>Setup required:</b> Add your Python Kronos engine as a second Railway service using the <code style={{ background: "rgba(99,102,241,0.15)", padding: "1px 5px", borderRadius: 4 }}>/python-engine</code> directory, then set the env var <code style={{ background: "rgba(99,102,241,0.15)", padding: "1px 5px", borderRadius: 4 }}>KRONOS_API_URL</code> to its internal URL (e.g. <code style={{ background: "rgba(99,102,241,0.15)", padding: "1px 5px", borderRadius: 4 }}>http://kronos-engine.railway.internal:8000</code>).
+            </p>
+          </div>
+        )}
+
+        {kronos?.hasData && kronos?.forecast && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 16 }}>
+            {/* Predicted Change */}
+            <div style={{ padding: "14px 16px", borderRadius: 12, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+              <p className="stat-label" style={{ marginBottom: 6 }}>Predicted Δ (60m)</p>
+              <p style={{
+                fontSize: 22, fontWeight: 700,
+                color: (kronos.forecast.predictedChangePercent ?? 0) >= 0 ? "var(--green)" : "var(--red)"
+              }}>
+                {(kronos.forecast.predictedChangePercent ?? 0) >= 0 ? "+" : ""}
+                {(kronos.forecast.predictedChangePercent ?? 0).toFixed(2)}%
+              </p>
+            </div>
+            {/* Predicted High */}
+            <div style={{ padding: "14px 16px", borderRadius: 12, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+              <p className="stat-label" style={{ marginBottom: 6 }}>Predicted High</p>
+              <p style={{ fontSize: 20, fontWeight: 700, color: "var(--green)" }}>
+                {(kronos.forecast.predictedHigh ?? 0).toLocaleString("en-EG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <span style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: 4 }}>EGP/g</span>
+              </p>
+            </div>
+            {/* Predicted Low */}
+            <div style={{ padding: "14px 16px", borderRadius: 12, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+              <p className="stat-label" style={{ marginBottom: 6 }}>Predicted Low</p>
+              <p style={{ fontSize: 20, fontWeight: 700, color: "var(--red)" }}>
+                {(kronos.forecast.predictedLow ?? 0).toLocaleString("en-EG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <span style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: 4 }}>EGP/g</span>
+              </p>
+            </div>
+            {/* DCA Buy Status */}
+            <div style={{
+              padding: "14px 16px", borderRadius: 12,
+              background: kronos.forecast.buySuppressed ? "rgba(239,68,68,0.06)" : "rgba(34,197,94,0.06)",
+              border: `1px solid ${kronos.forecast.buySuppressed ? "rgba(239,68,68,0.15)" : "rgba(34,197,94,0.15)"}`,
+            }}>
+              <p className="stat-label" style={{ marginBottom: 6 }}>Bot DCA Status</p>
+              <p style={{ fontSize: 14, fontWeight: 700, color: kronos.forecast.buySuppressed ? "var(--red)" : "var(--green)" }}>
+                {kronos.forecast.buySuppressed ? "⏸ Buy Paused" : "✅ Buy Allowed"}
+              </p>
+              <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+                {kronos.forecast.buySuppressed ? "Deeper dip predicted" : "No deeper dip predicted"}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Mini forecast sparkline */}
+        {kronos?.hasData && kronos?.forecast?.forecast && kronos.forecast.forecast.length > 0 && (
+          <div style={{ marginTop: 8 }}>
+            <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 8 }}>Forecasted price trajectory (next 60 min)</p>
+            <svg width="100%" height="60" viewBox={`0 0 ${kronos.forecast.forecast.length} 60`} preserveAspectRatio="none" style={{ display: "block" }}>
+              {(() => {
+                const data: number[] = kronos.forecast.forecast.map((f: any) => f.close);
+                const min = Math.min(...data);
+                const max = Math.max(...data);
+                const range = max - min || 1;
+                const pts = data.map((v: number, i: number) => `${i},${60 - ((v - min) / range) * 56}`).join(" ");
+                const isRising = data[data.length - 1] >= data[0];
+                return (
+                  <>
+                    <defs>
+                      <linearGradient id="kGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={isRising ? "#22c55e" : "#ef4444"} stopOpacity="0.3" />
+                        <stop offset="100%" stopColor={isRising ? "#22c55e" : "#ef4444"} stopOpacity="0" />
+                      </linearGradient>
+                    </defs>
+                    <polyline points={pts} fill="none" stroke={isRising ? "#22c55e" : "#ef4444"} strokeWidth="1.5" />
+                  </>
+                );
+              })()}
+            </svg>
+          </div>
+        )}
+
+        {!kronos?.hasData && kronos?.kronosApiConfigured && (
+          <p style={{ fontSize: 13, color: "var(--text-muted)", textAlign: "center", padding: "20px 0" }}>
+            No forecast data yet — waiting for bot tick…
+          </p>
+        )}
+
+        {kronos?.forecast?.fetchedAt && (
+          <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 10, display: "flex", alignItems: "center", gap: 4 }}>
+            <Clock size={10} /> Last forecast: {timeSince(kronos.forecast.fetchedAt)}
+          </p>
         )}
       </div>
 
