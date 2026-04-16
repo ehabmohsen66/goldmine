@@ -88,7 +88,16 @@ Example: [{"symbol": "COMI", "buyPrice": 75.5, "shares": 1000}]`;
     // Parse the JSON
     let parsedPortfolio;
     try {
-      parsedPortfolio = JSON.parse(textOutput.trim());
+      // Fix potential markdown code blocks returned by newer models
+      let cleanJson = textOutput.trim();
+      if (cleanJson.startsWith("```json")) {
+        cleanJson = cleanJson.replace(/```json/g, "").replace(/```/g, "").trim();
+      }
+      const rawParsed = JSON.parse(cleanJson);
+      
+      // Some models return {"portfolio": [...]} instead of just the array
+      parsedPortfolio = rawParsed.portfolio ? rawParsed.portfolio : rawParsed;
+      
     } catch (e) {
       throw new Error("Failed to parse Gemini output as JSON: " + textOutput);
     }
