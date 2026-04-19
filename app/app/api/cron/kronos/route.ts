@@ -26,10 +26,10 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const forced = url.searchParams.get("force") === "1";
 
-  // 2. Only run when market is open or if forced
-  if (!forced && !isMarketOpen()) {
-    return NextResponse.json({ skipped: true, reason: "Market closed" });
-  }
+  // BREAKING LIMITS: Run 24/7, ignore market hours so we can scan all 250 stocks constantly.
+  // if (!forced && !isMarketOpen()) {
+  //   return NextResponse.json({ skipped: true, reason: "Market closed" });
+  // }
 
   console.log("[kronos-cron] 🤖 Starting automatic Kronos predictions...");
 
@@ -57,8 +57,8 @@ export async function GET(request: Request) {
        return timeA - timeB;
     });
     
-    // Select the top 10 oldest/unscanned stocks
-    const symbolsToPredict = allSymbols.slice(0, 10);
+    // BREAKING LIMITS: Process 2 stocks per request, but run it EVERY MINUTE!
+    const symbolsToPredict = allSymbols.slice(0, 2);
     
     console.log(`[kronos-cron] 🎯 Selected ${symbolsToPredict.length} stocks from whole market rotation:`, symbolsToPredict);
 
