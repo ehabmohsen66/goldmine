@@ -30,7 +30,7 @@ export async function register() {
   // Send Telegram startup ping
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
-  if (token && chatId) {
+  if (false && token && chatId) {
     fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

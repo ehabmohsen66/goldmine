@@ -8,6 +8,8 @@ import type { EgxStock } from "./egx";
 const BASE = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}`;
 
 async function send(text: string): Promise<void> {
+  // Disabled per user request to stop telegram bot
+  return;
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
   if (!token || !chatId) return; // silently skip if not configured
