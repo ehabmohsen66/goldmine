@@ -51,8 +51,8 @@ export async function GET(request: Request) {
     
     const uniqueSymbols = Array.from(new Set(targetStocks.map(s => s.symbol)));
     
-    // Limit to 15 to prevent the cron job from timing out (maxDuration = 55s)
-    const symbolsToPredict = uniqueSymbols.slice(0, 15);
+    // Limit to 10 to prevent the cron job from timing out (maxDuration = 55s)
+    const symbolsToPredict = uniqueSymbols.slice(0, 10);
     
     console.log(`[kronos-cron] 🎯 Selected ${symbolsToPredict.length} stocks for prediction:`, symbolsToPredict);
 

@@ -104,11 +104,55 @@ export async function register() {
     }
   };
 
+  // ── Kronos predictions scheduler ──────────────────────────────────────────
+  // Runs every 60 min during EGX market hours (Sun–Thu, 10:00–14:30 Cairo).
+  let lastKronosRun = 0;
+  const KRONOS_URL = `http://localhost:${PORT}/api/cron/kronos`;
+
+  const runKronosScan = async () => {
+    try {
+      const cairoNow = new Date(new Date().toLocaleString("en-US", { timeZone: "Africa/Cairo" }));
+      const day = cairoNow.getDay();
+      const min = cairoNow.getHours() * 60 + cairoNow.getMinutes();
+      const isWeekday = day >= 0 && day <= 4;
+      const isSession = min >= 600 && min <= 870; // 10:00-14:30
+
+      if (!isWeekday || !isSession) return;
+
+      // Rate limit to once per 60 min
+      const elapsed = Date.now() - lastKronosRun;
+      if (elapsed < 58 * 60 * 1000) return;
+
+      lastKronosRun = Date.now();
+      console.log("[goldmine] ⏰ Kronos scan — triggering background predictions...");
+
+      const res = await fetch(KRONOS_URL, {
+        headers: cronHeaders,
+        signal: AbortSignal.timeout(60000), // api takes up to 55s
+      });
+      const data = await res.json() as any;
+
+      if (data.skipped) {
+        console.log(`[goldmine] Kronos scan skipped — ${data.reason}`);
+      } else if (data.ok) {
+        console.log(`[goldmine] ✓ Kronos scan — ${data.message}`);
+      } else {
+        console.error(`[goldmine] ✗ Kronos scan failed:`, data.error);
+      }
+    } catch (err) {
+      console.error(`[goldmine] ✗ Kronos scheduler error:`, err);
+    }
+  };
+
   // Run gold tick loop
   runTick();
   setInterval(runTick, INTERVAL_MS);
 
   // EGX: check every minute, the function itself rate-limits to every 30 min
   setInterval(runEgxScan, 60 * 1000);
-  runEgxScan(); // run once on startup (handles redeploy during market hours)
+  runEgxScan(); // run once on startup
+
+  // Kronos: check every minute, the function itself rate-limits to every 60 min
+  setInterval(runKronosScan, 60 * 1000);
+  runKronosScan(); // run once on startup
 }
