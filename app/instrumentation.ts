@@ -128,7 +128,9 @@ export async function register() {
 
       const res = await fetch(KRONOS_URL, {
         headers: cronHeaders,
-        signal: AbortSignal.timeout(60000), // api takes up to 55s
+        // Allow up to 10 minutes (600,000 ms) because the Python engine takes ~30s-40s per stock
+        // and we predict 10 stocks sequentially to avoid overloading the engine.
+        signal: AbortSignal.timeout(600000), 
       });
       const data = await res.json() as any;
 

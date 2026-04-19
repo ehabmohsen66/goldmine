@@ -3,7 +3,7 @@ import { getEgxDailyBrief, isMarketOpen } from "@/lib/egx";
 import { generateForecast } from "../../../api/egx/forecast/route";
 
 export const runtime = "nodejs";
-export const maxDuration = 55; // Next.js limits execution time
+export const maxDuration = 300; // Allow 5 minutes for sequential Python engine processing
 
 const CRON_SECRET = process.env.CRON_SECRET;
 
