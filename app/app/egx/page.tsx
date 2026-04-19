@@ -832,8 +832,19 @@ export default function EgxPage() {
                   const hasActual = pred.livePrice !== null;
                   const livePct = pred.liveChangePct;
                   const predictedDir = pred.predictedChangePercent >= 0;
-                  const actualDir = livePct !== null ? livePct >= 0 : null;
-                  const dirMatch = actualDir !== null ? predictedDir === actualDir : null;
+                  
+                  let actualDir: boolean | null = null;
+                  let dirMatch: boolean | null = null;
+                  
+                  if (livePct !== null) {
+                    // If it's less than 1 day old and the price hasn't moved at all (0.00%), don't judge it yet!
+                    if (daysSince === 0 && Math.abs(livePct) < 0.01) {
+                      dirMatch = null;
+                    } else {
+                      actualDir = livePct >= 0;
+                      dirMatch = predictedDir === actualDir;
+                    }
+                  }
 
                   const borderColor = dirMatch === true
                     ? "rgba(34,197,94,0.25)"
