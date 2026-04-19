@@ -95,7 +95,7 @@ export async function updateKronosPrediction(id: string, update: Partial<KronosP
   const r = getRedis();
   const all = await r.lrange(KEYS.KRONOS_HISTORY, 0, 199);
   for (let i = 0; i < all.length; i++) {
-    const item: KronosPredictionRecord = typeof all[i] === "string" ? JSON.parse(all[i] as string) : all[i] as KronosPredictionRecord;
+    const item: KronosPredictionRecord = typeof all[i] === "string" ? JSON.parse(all[i] as string) : all[i] as unknown as KronosPredictionRecord;
     if (item.id === id) {
       const updated = { ...item, ...update };
       await r.lset(KEYS.KRONOS_HISTORY, i, JSON.stringify(updated));
