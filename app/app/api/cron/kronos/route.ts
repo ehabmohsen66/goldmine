@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { getEgxDailyBrief, isMarketOpen } from "@/lib/egx";
+import { scanAllEgx, isMarketOpen } from "@/lib/egx";
 import { generateForecast } from "../../../api/egx/forecast/route";
+import { getKronosHistory } from "@/lib/redis";
 
 export const runtime = "nodejs";
 export const maxDuration = 300; // Allow 5 minutes for sequential Python engine processing
@@ -33,28 +34,33 @@ export async function GET(request: Request) {
   console.log("[kronos-cron] 🤖 Starting automatic Kronos predictions...");
 
   try {
-    // 3. Get top EGX stocks to predict on
-    // We fetch the brief because it already pre-sorts the top buys, gainers, and watchlist
-    const brief = await getEgxDailyBrief();
+    // 3. Get ALL EGX stocks to rotate through the entire market
+    const allStocks = await scanAllEgx(250);
+    const allSymbols = allStocks.map(s => s.symbol);
     
-    // We want to prioritize generating predictions for:
-    // a. Top Buys (Highest TradingView score)
-    // b. Watchlist (RSI oversold)
-    // c. Top Gainers (Momentum)
+    // Fetch history to see what was recently scanned
+    const history = await getKronosHistory(500);
+    const lastPredictedMap = new Map<string, number>();
     
-    // Combine them and ensure uniqueness by symbol
-    const targetStocks = [
-      ...brief.topBuys,
-      ...brief.watchlist,
-      ...brief.topGainers
-    ];
+    for (const record of history) {
+      const time = new Date(record.predictedAt).getTime();
+      const existing = lastPredictedMap.get(record.symbol);
+      if (!existing || time > existing) {
+         lastPredictedMap.set(record.symbol, time);
+      }
+    }
+
+    // Sort symbols: those never predicted come first (0), then the oldest predicted
+    allSymbols.sort((a, b) => {
+       const timeA = lastPredictedMap.get(a) || 0;
+       const timeB = lastPredictedMap.get(b) || 0;
+       return timeA - timeB;
+    });
     
-    const uniqueSymbols = Array.from(new Set(targetStocks.map(s => s.symbol)));
+    // Select the top 10 oldest/unscanned stocks
+    const symbolsToPredict = allSymbols.slice(0, 10);
     
-    // Limit to 10 to prevent the cron job from timing out (maxDuration = 55s)
-    const symbolsToPredict = uniqueSymbols.slice(0, 10);
-    
-    console.log(`[kronos-cron] 🎯 Selected ${symbolsToPredict.length} stocks for prediction:`, symbolsToPredict);
+    console.log(`[kronos-cron] 🎯 Selected ${symbolsToPredict.length} stocks from whole market rotation:`, symbolsToPredict);
 
     // 4. Run predictions sequentially to avoid overloading the Python Engine
     const results = [];
