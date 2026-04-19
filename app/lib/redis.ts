@@ -29,6 +29,7 @@ export const KEYS = {
   EGX_STOCK_COOLDOWN: (sym: string) => `egx:cooldown:${sym}`, // per-stock cooldown
   // Kronos
   KRONOS_FORECAST: "kronos:last_forecast",    // last AI forecast result
+  KRONOS_HISTORY: "kronos:prediction_history", // list of past predictions
 } as const;
 
 // ── Kronos ───────────────────────────────────────────────────────────────────
@@ -55,6 +56,52 @@ export async function getKronosForecast(): Promise<KronosForecastEntry | null> {
 export async function saveKronosForecast(entry: KronosForecastEntry): Promise<void> {
   const r = getRedis();
   await r.set(KEYS.KRONOS_FORECAST, JSON.stringify(entry), { ex: 60 * 60 * 6 }); // 6hr TTL
+}
+
+// ── Kronos Prediction History ────────────────────────────────────────────────
+export interface KronosPredictionRecord {
+  id: string;
+  symbol: string;
+  predictedAt: string;            // ISO when prediction was made
+  priceAtPrediction: number;      // current price when predicted
+  predictedHigh: number;
+  predictedLow: number;
+  predictedChangePercent: number;
+  predictedEndPrice: number;      // forecasted price at end of prediction window
+  predictionDays: number;         // how many days ahead (e.g. 120)
+  // Filled in later when we check actuals
+  actualPrice?: number;           // actual price at check time
+  actualChangePercent?: number;
+  checkedAt?: string;             // ISO when actual was checked
+  directionCorrect?: boolean;     // did Kronos get the direction right?
+}
+
+/** Save a new prediction to history (capped at 200) */
+export async function logKronosPrediction(record: KronosPredictionRecord): Promise<void> {
+  const r = getRedis();
+  await r.lpush(KEYS.KRONOS_HISTORY, JSON.stringify(record));
+  await r.ltrim(KEYS.KRONOS_HISTORY, 0, 199);
+}
+
+/** Get all prediction history */
+export async function getKronosHistory(limit = 100): Promise<KronosPredictionRecord[]> {
+  const r = getRedis();
+  const raw = await r.lrange(KEYS.KRONOS_HISTORY, 0, limit - 1);
+  return raw.map(item => (typeof item === "string" ? JSON.parse(item) : item));
+}
+
+/** Update a prediction record by id (for actual price check) */
+export async function updateKronosPrediction(id: string, update: Partial<KronosPredictionRecord>): Promise<void> {
+  const r = getRedis();
+  const all = await r.lrange(KEYS.KRONOS_HISTORY, 0, 199);
+  for (let i = 0; i < all.length; i++) {
+    const item: KronosPredictionRecord = typeof all[i] === "string" ? JSON.parse(all[i] as string) : all[i] as KronosPredictionRecord;
+    if (item.id === id) {
+      const updated = { ...item, ...update };
+      await r.lset(KEYS.KRONOS_HISTORY, i, JSON.stringify(updated));
+      break;
+    }
+  }
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────

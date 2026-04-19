@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { logKronosPrediction } from "@/lib/redis";
 
 export const runtime = "nodejs";
 
@@ -63,13 +64,36 @@ export async function POST(req: Request) {
     }
 
     const kData = await kReq.json();
-    
+    const currentPrice = candles[candles.length - 1].close;
+    const forecastArr: Array<{ timestamp: string; close: number }> = kData.forecast || [];
+    const endPrice = forecastArr.length > 0 ? forecastArr[forecastArr.length - 1].close : currentPrice;
+    const predictedHigh = forecastArr.length > 0 ? Math.max(...forecastArr.map(f => f.close)) : currentPrice;
+    const predictedLow = forecastArr.length > 0 ? Math.min(...forecastArr.map(f => f.close)) : currentPrice;
+    const predictedChangePct = ((endPrice - currentPrice) / currentPrice) * 100;
+
+    // Log prediction to history for tracking accuracy
+    try {
+      await logKronosPrediction({
+        id: `${Date.now()}-${symbol}`,
+        symbol,
+        predictedAt: new Date().toISOString(),
+        priceAtPrediction: currentPrice,
+        predictedHigh,
+        predictedLow,
+        predictedChangePercent: predictedChangePct,
+        predictedEndPrice: endPrice,
+        predictionDays: 120,
+      });
+    } catch (e) {
+      console.warn("Failed to log Kronos prediction to history:", e);
+    }
+
     // We only need the forecast array to return
     return NextResponse.json({
         ok: true,
         symbol,
-        currentPrice: candles[candles.length - 1].close,
-        forecast: kData.forecast, // array of { timestamp, close }
+        currentPrice,
+        forecast: forecastArr,
     });
 
   } catch (err: any) {

@@ -5,7 +5,8 @@ import Link from "next/link";
 import {
   TrendingUp, TrendingDown, RefreshCw, BarChart3,
   Activity, AlertTriangle, ChevronLeft, Zap, Clock,
-  ArrowUpRight, ArrowDownRight, Briefcase, Bell, BrainCircuit, X
+  ArrowUpRight, ArrowDownRight, Briefcase, Bell, BrainCircuit, X,
+  Brain, CheckCircle2, XCircle, Target
 } from "lucide-react";
 import dynamic from "next/dynamic";
 
@@ -144,7 +145,7 @@ function StockRow({ stock, onPredict }: { stock: EgxStock, onPredict?: (sym: str
   );
 }
 
-function PortfolioCard({ pos }: { pos: EgxPosition }) {
+function PortfolioCard({ pos, onPredict }: { pos: EgxPosition; onPredict?: (sym: string) => void }) {
   const ageH = (Date.now() - new Date(pos.alertedAt).getTime()) / 3600000;
   const sc = signalColor(pos.lastSignal);
   return (
@@ -158,12 +159,26 @@ function PortfolioCard({ pos }: { pos: EgxPosition }) {
           <p style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>{pos.symbol}</p>
           <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{pos.name}</p>
         </div>
-        <span style={{
-          fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 5,
-          background: `${sc}22`, border: `1px solid ${sc}44`, color: sc,
-        }}>
-          {pos.lastSignal.replace("_", " ")}
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {onPredict && (
+            <button
+              onClick={() => onPredict(pos.symbol)}
+              style={{
+                background: "rgba(99,102,241,0.15)", color: "#818cf8", border: "1px solid rgba(99,102,241,0.3)",
+                padding: "4px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, display: "flex", alignItems: "center", gap: 4, cursor: "pointer",
+                transition: "all 0.2s",
+              }}
+            >
+              <BrainCircuit size={12} /> AI Forecast
+            </button>
+          )}
+          <span style={{
+            fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 5,
+            background: `${sc}22`, border: `1px solid ${sc}44`, color: sc,
+          }}>
+            {pos.lastSignal.replace("_", " ")}
+          </span>
+        </div>
       </div>
       <div style={{ display: "flex", gap: 16, marginTop: 10, flexWrap: "wrap" }}>
         <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
@@ -223,7 +238,7 @@ function MoodBar({ bullish, neutral, bearish }: { bullish: number; neutral: numb
 export default function EgxPage() {
   const [data, setData]             = useState<EgxBriefResponse | null>(null);
   const [loading, setLoading]       = useState(true);
-  const [tab, setTab]               = useState<"market" | "portfolio" | "history">("market");
+  const [tab, setTab]               = useState<"market" | "portfolio" | "history" | "kronos">("market");
   const [strongBuyOnly, setStrongBuyOnly] = useState(false);
   
   // AI Upload State
@@ -235,6 +250,23 @@ export default function EgxPage() {
   const [kronosSymbol, setKronosSymbol] = useState<string | null>(null);
   const [kronosLoading, setKronosLoading] = useState(false);
   const [kronosData, setKronosData] = useState<any | null>(null);
+
+  // Kronos History Tab State
+  const [kronosHistory, setKronosHistory] = useState<any | null>(null);
+  const [kronosHistoryLoading, setKronosHistoryLoading] = useState(false);
+
+  const fetchKronosHistory = useCallback(async () => {
+    setKronosHistoryLoading(true);
+    try {
+      const res = await fetch("/api/egx/kronos-history");
+      if (res.ok) setKronosHistory(await res.json());
+    } catch { /* silent */ }
+    finally { setKronosHistoryLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    if (tab === "kronos" && !kronosHistory) fetchKronosHistory();
+  }, [tab, kronosHistory, fetchKronosHistory]);
 
   const predictKronos = async (symbol: string) => {
     setKronosSymbol(symbol);
@@ -456,6 +488,10 @@ export default function EgxPage() {
           <Bell size={12} style={{ display: "inline", marginRight: 5 }} />
           السجل {data?.alerts?.length ? `(${data.alerts.length})` : ""}
         </button>
+        <button style={TAB_STYLE(tab === "kronos")} onClick={() => setTab("kronos")}>
+          <Brain size={12} style={{ display: "inline", marginRight: 5 }} />
+          Kronos AI
+        </button>
       </div>
 
       {/* ── MARKET TAB ── */}
@@ -627,7 +663,7 @@ export default function EgxPage() {
             {loading ? (
               [...Array(3)].map((_, i) => <div key={i} className="skeleton" style={{ height: 75, borderRadius: 12, marginBottom: 8 }} />)
             ) : visiblePortfolio.length ? (
-              visiblePortfolio.map(p => <PortfolioCard key={p.symbol} pos={p} />)
+              visiblePortfolio.map(p => <PortfolioCard key={p.symbol} pos={p} onPredict={predictKronos} />)
             ) : strongBuyOnly ? (
               <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--text-muted)" }}>
                 <span style={{ fontSize: 36, display: "block", marginBottom: 12 }}>⚡</span>
@@ -664,6 +700,233 @@ export default function EgxPage() {
               <p style={{ fontSize: 12, marginTop: 6 }}>ستصلك التنبيهات تلقائياً أثناء جلسة التداول</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── KRONOS HISTORY TAB ── */}
+      {tab === "kronos" && (
+        <div>
+          {/* Stats Overview Cards */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 20 }}>
+            {/* Accuracy Card */}
+            <div className="glass-card" style={{
+              padding: "20px", textAlign: "center",
+              background: "linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(139,92,246,0.05) 100%)",
+              border: "1px solid rgba(99,102,241,0.2)",
+            }}>
+              <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>دقة التوقعات</p>
+              {kronosHistoryLoading ? (
+                <div className="skeleton" style={{ width: 60, height: 36, margin: "0 auto" }} />
+              ) : (
+                <p style={{ fontSize: 32, fontWeight: 800, color: "#818cf8" }}>
+                  {kronosHistory?.stats?.accuracy !== null ? `${kronosHistory?.stats?.accuracy}%` : "—"}
+                </p>
+              )}
+              <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>Direction Accuracy</p>
+            </div>
+
+            {/* Total Predictions */}
+            <div className="glass-card" style={{ padding: "20px", textAlign: "center" }}>
+              <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>إجمالي التنبؤات</p>
+              {kronosHistoryLoading ? (
+                <div className="skeleton" style={{ width: 40, height: 36, margin: "0 auto" }} />
+              ) : (
+                <p style={{ fontSize: 32, fontWeight: 800, color: "var(--text-primary)" }}>
+                  {kronosHistory?.stats?.total ?? 0}
+                </p>
+              )}
+              <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>All Time</p>
+            </div>
+
+            {/* Correct Predictions */}
+            <div className="glass-card" style={{ padding: "20px", textAlign: "center" }}>
+              <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>اتجاه صحيح</p>
+              {kronosHistoryLoading ? (
+                <div className="skeleton" style={{ width: 40, height: 36, margin: "0 auto" }} />
+              ) : (
+                <p style={{ fontSize: 32, fontWeight: 800, color: "#22C55E" }}>
+                  {kronosHistory?.stats?.correct ?? 0}
+                </p>
+              )}
+              <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>
+                من {kronosHistory?.stats?.checked ?? 0} تم التحقق منها
+              </p>
+            </div>
+
+            {/* Wrong Predictions */}
+            <div className="glass-card" style={{ padding: "20px", textAlign: "center" }}>
+              <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>اتجاه خاطئ</p>
+              {kronosHistoryLoading ? (
+                <div className="skeleton" style={{ width: 40, height: 36, margin: "0 auto" }} />
+              ) : (
+                <p style={{ fontSize: 32, fontWeight: 800, color: "#EF4444" }}>
+                  {(kronosHistory?.stats?.checked ?? 0) - (kronosHistory?.stats?.correct ?? 0)}
+                </p>
+              )}
+              <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>Incorrect Direction</p>
+            </div>
+          </div>
+
+          {/* Prediction History Cards */}
+          <div className="glass-card" style={{ padding: 24 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: 10,
+                background: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                boxShadow: "0 0 14px rgba(99,102,241,0.4)",
+              }}>
+                <Brain size={16} color="#fff" />
+              </div>
+              <div>
+                <h2 style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>سجل توقعات Kronos-AI</h2>
+                <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 1 }}>مقارنة التوقعات بالأسعار الفعلية</p>
+              </div>
+              <button
+                className="btn-ghost"
+                onClick={fetchKronosHistory}
+                style={{ marginLeft: "auto", padding: "6px 12px", display: "flex", alignItems: "center", gap: 5, fontSize: 12 }}
+              >
+                <RefreshCw size={12} /> تحديث
+              </button>
+            </div>
+
+            {kronosHistoryLoading ? (
+              [...Array(4)].map((_, i) => (
+                <div key={i} className="skeleton" style={{ height: 110, borderRadius: 14, marginBottom: 10 }} />
+              ))
+            ) : !kronosHistory?.predictions?.length ? (
+              <div style={{ textAlign: "center", padding: "50px 20px", color: "var(--text-muted)" }}>
+                <Brain size={40} style={{ margin: "0 auto 16px", opacity: 0.2 }} />
+                <p style={{ fontSize: 15, fontWeight: 600 }}>لا توجد توقعات بعد</p>
+                <p style={{ fontSize: 12, marginTop: 8, lineHeight: 1.5 }}>
+                  استخدم زر <span style={{ color: "#818cf8", fontWeight: 600 }}>AI Forecast</span> على أي سهم في تبويب السوق أو المحفظة<br />
+                  لإنشاء أول توقع وتتبع دقته مع الوقت
+                </p>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {kronosHistory.predictions.map((pred: any, i: number) => {
+                  const daysSince = Math.floor((Date.now() - new Date(pred.predictedAt).getTime()) / (1000 * 60 * 60 * 24));
+                  const hasActual = pred.livePrice !== null;
+                  const livePct = pred.liveChangePct;
+                  const predictedDir = pred.predictedChangePercent >= 0;
+                  const actualDir = livePct !== null ? livePct >= 0 : null;
+                  const dirMatch = actualDir !== null ? predictedDir === actualDir : null;
+
+                  const borderColor = dirMatch === true
+                    ? "rgba(34,197,94,0.25)"
+                    : dirMatch === false
+                    ? "rgba(239,68,68,0.25)"
+                    : "rgba(99,102,241,0.2)";
+
+                  const bgColor = dirMatch === true
+                    ? "rgba(34,197,94,0.04)"
+                    : dirMatch === false
+                    ? "rgba(239,68,68,0.04)"
+                    : "rgba(99,102,241,0.04)";
+
+                  return (
+                    <div key={pred.id || i} style={{
+                      padding: "16px 20px", borderRadius: 14,
+                      background: bgColor, border: `1px solid ${borderColor}`,
+                      transition: "all 0.2s",
+                    }}>
+                      {/* Top Row: Symbol + Direction Badge */}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <BrainCircuit size={16} color="#818cf8" />
+                          <div>
+                            <span style={{ fontSize: 16, fontWeight: 800, color: "var(--text-primary)" }}>{pred.symbol}</span>
+                            <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 8 }}>
+                              منذ {daysSince === 0 ? "اليوم" : `${daysSince} يوم`}
+                            </span>
+                          </div>
+                        </div>
+                        {dirMatch !== null ? (
+                          <span style={{
+                            display: "flex", alignItems: "center", gap: 4,
+                            fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20,
+                            background: dirMatch ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)",
+                            color: dirMatch ? "#22C55E" : "#EF4444",
+                            border: `1px solid ${dirMatch ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}`,
+                          }}>
+                            {dirMatch ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
+                            {dirMatch ? "اتجاه صحيح ✓" : "اتجاه خاطئ ✗"}
+                          </span>
+                        ) : (
+                          <span style={{
+                            fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
+                            background: "rgba(99,102,241,0.1)", color: "#818cf8",
+                            border: "1px solid rgba(99,102,241,0.2)",
+                          }}>
+                            ⏳ قيد المتابعة
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Price Comparison Grid */}
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                        {/* Price at Prediction */}
+                        <div style={{ padding: "10px 12px", background: "rgba(255,255,255,0.03)", borderRadius: 10 }}>
+                          <p style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>السعر عند التوقع</p>
+                          <p style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>
+                            {pred.priceAtPrediction.toFixed(2)}
+                            <span style={{ fontSize: 10, color: "var(--text-muted)", marginLeft: 3 }}>EGP</span>
+                          </p>
+                        </div>
+
+                        {/* Kronos Predicted */}
+                        <div style={{ padding: "10px 12px", background: "rgba(99,102,241,0.06)", borderRadius: 10, border: "1px solid rgba(99,102,241,0.1)" }}>
+                          <p style={{ fontSize: 10, color: "#818cf8", marginBottom: 4, display: "flex", alignItems: "center", gap: 3 }}>
+                            <Target size={9} /> توقع Kronos
+                          </p>
+                          <p style={{ fontSize: 15, fontWeight: 700, color: pred.predictedChangePercent >= 0 ? "#22C55E" : "#EF4444" }}>
+                            {pred.predictedChangePercent >= 0 ? "+" : ""}{pred.predictedChangePercent.toFixed(2)}%
+                          </p>
+                          <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>
+                            هدف: {pred.predictedEndPrice.toFixed(2)} EGP
+                          </p>
+                        </div>
+
+                        {/* Actual / Live */}
+                        <div style={{ padding: "10px 12px", background: hasActual ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.02)", borderRadius: 10 }}>
+                          <p style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>
+                            {hasActual ? "السعر الحالي" : "—"}
+                          </p>
+                          {hasActual ? (
+                            <>
+                              <p style={{ fontSize: 15, fontWeight: 700, color: livePct >= 0 ? "#22C55E" : "#EF4444" }}>
+                                {livePct >= 0 ? "+" : ""}{livePct.toFixed(2)}%
+                              </p>
+                              <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>
+                                {pred.livePrice.toFixed(2)} EGP
+                              </p>
+                            </>
+                          ) : (
+                            <p style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 600 }}>بانتظار البيانات</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Footer: date + prediction range */}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
+                        <span style={{ fontSize: 10, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 4 }}>
+                          <Clock size={9} />
+                          {new Date(pred.predictedAt).toLocaleDateString("ar-EG", { day: "numeric", month: "short", year: "numeric" })}
+                          {" · "}
+                          {new Date(pred.predictedAt).toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                        <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                          نافذة التوقع: {pred.predictionDays} يوم · أعلى: {pred.predictedHigh.toFixed(2)} · أدنى: {pred.predictedLow.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
