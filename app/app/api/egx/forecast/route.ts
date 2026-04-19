@@ -9,7 +9,8 @@ export async function generateForecast(symbol: string) {
   const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=1d&range=2y`;
 
     const yRes = await fetch(yUrl, {
-      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+      signal: AbortSignal.timeout(15000), // Bug fix: prevent indefinite hang if Yahoo is slow
     }).catch(e => { throw new Error(`Yahoo API error for ${yahooSymbol}: ${e.message}`); });
     
     if (!yRes.ok) throw new Error("Yahoo fetch failed");
@@ -28,11 +29,12 @@ export async function generateForecast(symbol: string) {
         if (quote.close[i] === null) continue;
         
         candles.push({
-            open: quote.open[i] || quote.close[i],
-            high: quote.high[i] || quote.close[i],
-            low: quote.low[i] || quote.close[i],
-            close: quote.close[i],
-            volume: quote.volume[i] || 0,
+            // Bug fix: use ?? instead of || so that open/high/low=0 isn't replaced with close
+            open:   quote.open[i]   ?? quote.close[i],
+            high:   quote.high[i]   ?? quote.close[i],
+            low:    quote.low[i]    ?? quote.close[i],
+            close:  quote.close[i],
+            volume: quote.volume[i] ?? 0,
             timestamp: new Date(timestamps[i] * 1000).toISOString()
         });
     }
@@ -48,7 +50,8 @@ export async function generateForecast(symbol: string) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
            symbol: yahooSymbol,
-           lookback: 400,
+           // Bug fix: cap lookback to actual available candles to avoid model input mismatch
+           lookback: Math.min(400, candles.length - 1),
            pred_len: 1, // predict ONLY tomorrow
            freq: "1D",    // daily interval
            candles: candles

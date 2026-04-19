@@ -33,7 +33,14 @@ export async function GET() {
           const data = await res.json();
           const closes: number[] = (data.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? [])
             .filter((c: number | null) => c !== null);
-          if (closes.length > 0) priceMap[symbol] = closes[closes.length - 1];
+          // Bug fix: use second-to-last close (yesterday's confirmed close) for settling
+          // 1-day predictions. The last element is today's intraday price which is still moving.
+          // For predictions made yesterday, the correct exit price is yesterday's official close.
+          if (closes.length >= 2) {
+            priceMap[symbol] = closes[closes.length - 2]; // yesterday's confirmed close
+          } else if (closes.length === 1) {
+            priceMap[symbol] = closes[0];
+          }
         } catch { /* skip */ }
       })
     );
