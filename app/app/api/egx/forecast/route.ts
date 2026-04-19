@@ -55,7 +55,9 @@ export async function generateForecast(symbol: string) {
            pred_len: 1, // predict ONLY tomorrow
            freq: "1D",    // daily interval
            candles: candles
-        })
+        }),
+        // Bug fix: timeout per prediction — if Kronos engine hangs (OOM/deadlock), don't block cron forever
+        signal: AbortSignal.timeout(120000), // 2 minutes max per stock
     }).catch(e => { throw new Error(`Kronos Network Error (${kronosUrl}): ${e.message}. Is the Engine Online?`); });
 
     if (!kReq.ok) {

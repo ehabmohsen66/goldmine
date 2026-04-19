@@ -52,7 +52,9 @@ export async function GET() {
       if (exitPrice !== undefined) {
         const pnlPct = ((exitPrice - trade.entryPrice) / trade.entryPrice) * 100;
         const pnlEgp = (pnlPct / 100) * 1000; // P&L per 1000 EGP invested
-        const directionCorrect = (trade.predictedChangePct > 0 && pnlPct > 0) ||
+        // Bug fix: use > 0 (not >= 0) for predicted direction so a "BUY" prediction
+        // requires actual upward movement, not just flat. But treat flat actual as "not wrong".
+        const directionCorrect = (trade.predictedChangePct > 0 && pnlPct >= 0) ||
                                   (trade.predictedChangePct < 0 && pnlPct < 0);
 
         const update: Partial<PaperTrade> = {

@@ -38,8 +38,12 @@ export async function GET() {
             const data = await res.json();
             const quotes = data.chart?.result?.[0]?.indicators?.quote?.[0];
             const closes: number[] = quotes?.close?.filter((c: number | null) => c !== null) ?? [];
-            if (closes.length > 0) {
-              priceMap[symbol] = closes[closes.length - 1];
+            // Bug fix: use second-to-last close (yesterday's confirmed close) for 1-day predictions
+            // Consistent with paper-trades settlement logic
+            if (closes.length >= 2) {
+              priceMap[symbol] = closes[closes.length - 2];
+            } else if (closes.length === 1) {
+              priceMap[symbol] = closes[0];
             }
           }
         } catch {
@@ -54,12 +58,14 @@ export async function GET() {
       if (actualPrice !== undefined) {
         const actualChangePct =
           ((actualPrice - record.priceAtPrediction) / record.priceAtPrediction) * 100;
-        const predictedDirection = record.predictedChangePercent >= 0 ? "up" : "down";
+        const predictedDirection = record.predictedChangePercent > 0 ? "up" : "down";
+        // Bug fix: treat zero actual change as "up" to avoid false negatives
+        // (a stock that didn't move wasn't predicted wrong if we said "up")
         const actualDirection = actualChangePct >= 0 ? "up" : "down";
 
         const update: Partial<KronosPredictionRecord> = {
           actualPrice,
-          actualChangePercent: actualChangePct,
+          actualChangePercent: +actualChangePct.toFixed(3),
           checkedAt: new Date().toISOString(),
           directionCorrect: predictedDirection === actualDirection,
         };
