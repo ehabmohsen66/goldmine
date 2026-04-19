@@ -6,7 +6,7 @@ import {
   TrendingUp, TrendingDown, RefreshCw, BarChart3,
   Activity, AlertTriangle, ChevronLeft, Zap, Clock,
   ArrowUpRight, ArrowDownRight, Briefcase, Bell, BrainCircuit, X,
-  Brain, CheckCircle2, XCircle, Target
+  Brain, CheckCircle2, XCircle, Target, Sparkles, TrendingUp as TrendUp
 } from "lucide-react";
 import dynamic from "next/dynamic";
 
@@ -238,7 +238,7 @@ function MoodBar({ bullish, neutral, bearish }: { bullish: number; neutral: numb
 export default function EgxPage() {
   const [data, setData]             = useState<EgxBriefResponse | null>(null);
   const [loading, setLoading]       = useState(true);
-  const [tab, setTab]               = useState<"market" | "portfolio" | "history" | "kronos">("market");
+  const [tab, setTab]               = useState<"market" | "portfolio" | "history" | "kronos" | "recs">("market");
   const [strongBuyOnly, setStrongBuyOnly] = useState(false);
   
   // AI Upload State
@@ -267,6 +267,23 @@ export default function EgxPage() {
   useEffect(() => {
     if (tab === "kronos" && !kronosHistory) fetchKronosHistory();
   }, [tab, kronosHistory, fetchKronosHistory]);
+
+  // Kronos Recommendations Tab State
+  const [kronosRecs, setKronosRecs] = useState<any | null>(null);
+  const [kronosRecsLoading, setKronosRecsLoading] = useState(false);
+
+  const fetchKronosRecs = useCallback(async () => {
+    setKronosRecsLoading(true);
+    try {
+      const res = await fetch("/api/egx/kronos-recs");
+      if (res.ok) setKronosRecs(await res.json());
+    } catch { /* silent */ }
+    finally { setKronosRecsLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    if (tab === "recs" && !kronosRecs) fetchKronosRecs();
+  }, [tab, kronosRecs, fetchKronosRecs]);
 
   const predictKronos = async (symbol: string) => {
     setKronosSymbol(symbol);
@@ -491,6 +508,10 @@ export default function EgxPage() {
         <button style={TAB_STYLE(tab === "kronos")} onClick={() => setTab("kronos")}>
           <Brain size={12} style={{ display: "inline", marginRight: 5 }} />
           Kronos AI
+        </button>
+        <button style={TAB_STYLE(tab === "recs")} onClick={() => setTab("recs")}>
+          <Sparkles size={12} style={{ display: "inline", marginRight: 5 }} />
+          توصيات
         </button>
       </div>
 
@@ -927,6 +948,256 @@ export default function EgxPage() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ── KRONOS RECOMMENDATIONS TAB ── */}
+      {tab === "recs" && (
+        <div>
+          {/* Header banner */}
+          <div style={{
+            marginBottom: 20, padding: "20px 24px", borderRadius: 16,
+            background: "linear-gradient(135deg, rgba(99,102,241,0.12) 0%, rgba(139,92,246,0.08) 50%, rgba(236,72,153,0.05) 100%)",
+            border: "1px solid rgba(99,102,241,0.25)",
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            boxShadow: "0 0 40px rgba(99,102,241,0.08) inset",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{
+                width: 44, height: 44, borderRadius: 14,
+                background: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                boxShadow: "0 0 20px rgba(99,102,241,0.5)",
+                flexShrink: 0,
+              }}>
+                <Sparkles size={22} color="#fff" />
+              </div>
+              <div>
+                <h2 style={{ fontSize: 17, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
+                  توصيات Kronos-AI للشراء
+                </h2>
+                <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>
+                  مرتبة حسب نقاط الاقتناع · بناءً على أحدث توقعات Kronos لكل سهم
+                </p>
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {kronosRecs?.stats && (
+                <div style={{ display: "flex", gap: 8 }}>
+                  {kronosRecs.stats.strongBuyCount > 0 && (
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20, background: "rgba(34,197,94,0.15)", color: "#22C55E", border: "1px solid rgba(34,197,94,0.3)" }}>
+                      ⚡ {kronosRecs.stats.strongBuyCount} Strong Buy
+                    </span>
+                  )}
+                  {kronosRecs.stats.buyCount > 0 && (
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20, background: "rgba(99,102,241,0.12)", color: "#818cf8", border: "1px solid rgba(99,102,241,0.25)" }}>
+                      {kronosRecs.stats.buyCount} Buy
+                    </span>
+                  )}
+                </div>
+              )}
+              <button
+                className="btn-ghost"
+                onClick={fetchKronosRecs}
+                style={{ padding: "6px 12px", display: "flex", alignItems: "center", gap: 5, fontSize: 12 }}
+              >
+                <RefreshCw size={12} /> تحديث
+              </button>
+            </div>
+          </div>
+
+          {/* Recommendations grid */}
+          {kronosRecsLoading ? (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 14 }}>
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="skeleton" style={{ height: 200, borderRadius: 16 }} />
+              ))}
+            </div>
+          ) : !kronosRecs?.recommendations?.length ? (
+            <div className="glass-card" style={{ padding: "60px 24px", textAlign: "center" }}>
+              <div style={{ width: 64, height: 64, borderRadius: 20, background: "rgba(99,102,241,0.08)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
+                <Sparkles size={28} color="rgba(99,102,241,0.4)" />
+              </div>
+              <p style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)", marginBottom: 10 }}>لا توجد توصيات بعد</p>
+              <p style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.7, maxWidth: 400, margin: "0 auto" }}>
+                استخدم زر <span style={{ color: "#818cf8", fontWeight: 700 }}>AI Forecast</span> على أي سهم في تبويب
+                <span style={{ color: "#EAB308", fontWeight: 700 }}> السوق</span> أو
+                <span style={{ color: "#22C55E", fontWeight: 700 }}> المحفظة</span>.<br />
+                Kronos سيحلل البيانات التاريخية ويتوقع مسار السعر خلال 120 يوماً،
+                وتظهر التوصيات هنا تلقائياً.
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 14 }}>
+              {kronosRecs.recommendations.map((rec: any, idx: number) => {
+                const isStrong = rec.strength === "STRONG_BUY";
+                const isBuy   = rec.strength === "BUY";
+                const isWatch = rec.strength === "WATCH";
+
+                const strengthColor = isStrong ? "#22C55E" : isBuy ? "#818cf8" : "#EAB308";
+                const strengthBg    = isStrong ? "rgba(34,197,94,0.1)" : isBuy ? "rgba(99,102,241,0.1)" : "rgba(234,179,8,0.1)";
+                const strengthBorder= isStrong ? "rgba(34,197,94,0.3)" : isBuy ? "rgba(99,102,241,0.3)" : "rgba(234,179,8,0.3)";
+                const cardBorder    = isStrong ? "rgba(34,197,94,0.2)" : isBuy ? "rgba(99,102,241,0.15)" : "rgba(255,255,255,0.06)";
+                const cardGlow      = isStrong ? "0 0 30px rgba(34,197,94,0.06) inset" : isBuy ? "0 0 30px rgba(99,102,241,0.05) inset" : "none";
+
+                const rankColor = idx === 0 ? "#F59E0B" : idx === 1 ? "#94A3B8" : idx === 2 ? "#CD7F32" : "var(--text-muted)";
+
+                return (
+                  <div key={rec.symbol} style={{
+                    padding: "20px", borderRadius: 16,
+                    background: "rgba(255,255,255,0.02)",
+                    border: `1px solid ${cardBorder}`,
+                    boxShadow: cardGlow,
+                    position: "relative", overflow: "hidden",
+                    transition: "all 0.2s",
+                  }}>
+                    {/* Rank badge */}
+                    <div style={{
+                      position: "absolute", top: 14, right: 14,
+                      width: 28, height: 28, borderRadius: 8,
+                      background: "rgba(255,255,255,0.05)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 12, fontWeight: 800, color: rankColor,
+                    }}>
+                      #{idx + 1}
+                    </div>
+
+                    {/* Symbol + strength */}
+                    <div style={{ marginBottom: 16, paddingRight: 36 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                        <BrainCircuit size={15} color="#818cf8" />
+                        <span style={{ fontSize: 20, fontWeight: 900, color: "var(--text-primary)", letterSpacing: "-0.01em" }}>
+                          {rec.symbol}
+                        </span>
+                      </div>
+                      <span style={{
+                        fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 20,
+                        background: strengthBg, color: strengthColor, border: `1px solid ${strengthBorder}`,
+                        display: "inline-flex", alignItems: "center", gap: 4,
+                      }}>
+                        {isStrong ? "⚡" : isBuy ? "🔵" : "👀"} {rec.strength.replace("_", " ")}
+                      </span>
+                    </div>
+
+                    {/* Conviction bar */}
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>نقاط الاقتناع</span>
+                        <span style={{ fontSize: 13, fontWeight: 800, color: strengthColor }}>{rec.conviction}/100</span>
+                      </div>
+                      <div style={{ height: 6, borderRadius: 99, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
+                        <div style={{
+                          height: "100%", borderRadius: 99, width: `${rec.conviction}%`,
+                          background: isStrong
+                            ? "linear-gradient(90deg, #16a34a, #22C55E)"
+                            : isBuy
+                            ? "linear-gradient(90deg, #4f46e5, #818cf8)"
+                            : "linear-gradient(90deg, #a16207, #EAB308)",
+                          transition: "width 0.8s ease",
+                        }} />
+                      </div>
+                    </div>
+
+                    {/* Price grid */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
+                      <div style={{ padding: "8px 10px", background: "rgba(255,255,255,0.03)", borderRadius: 10 }}>
+                        <p style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 3, textTransform: "uppercase", letterSpacing: "0.05em" }}>سعر التوقع</p>
+                        <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>
+                          {rec.priceAtPrediction.toFixed(2)}
+                          <span style={{ fontSize: 9, color: "var(--text-muted)", marginLeft: 2 }}>EGP</span>
+                        </p>
+                      </div>
+                      <div style={{ padding: "8px 10px", background: "rgba(99,102,241,0.06)", borderRadius: 10, border: "1px solid rgba(99,102,241,0.12)" }}>
+                        <p style={{ fontSize: 9, color: "#818cf8", marginBottom: 3, display: "flex", alignItems: "center", gap: 2, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                          <Target size={8} /> هدف Kronos
+                        </p>
+                        <p style={{ fontSize: 13, fontWeight: 700, color: "#22C55E" }}>
+                          {rec.predictedEndPrice.toFixed(2)}
+                          <span style={{ fontSize: 9, color: "var(--text-muted)", marginLeft: 2 }}>EGP</span>
+                        </p>
+                      </div>
+                      <div style={{ padding: "8px 10px", background: "rgba(255,255,255,0.03)", borderRadius: 10 }}>
+                        <p style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 3, textTransform: "uppercase", letterSpacing: "0.05em" }}>السعر الحالي</p>
+                        {rec.livePrice ? (
+                          <>
+                            <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>
+                              {rec.livePrice.toFixed(2)}
+                              <span style={{ fontSize: 9, color: "var(--text-muted)", marginLeft: 2 }}>EGP</span>
+                            </p>
+                            <p style={{ fontSize: 10, fontWeight: 600, color: rec.dayChange >= 0 ? "#22C55E" : "#EF4444", marginTop: 1 }}>
+                              {rec.dayChange >= 0 ? "+" : ""}{rec.dayChange.toFixed(2)}% اليوم
+                            </p>
+                          </>
+                        ) : (
+                          <p style={{ fontSize: 12, color: "var(--text-muted)" }}>—</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Upside + stats row */}
+                    <div style={{
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                      padding: "10px 12px", borderRadius: 10,
+                      background: rec.remainingUpside > 0 ? "rgba(34,197,94,0.06)" : "rgba(239,68,68,0.06)",
+                      border: `1px solid ${rec.remainingUpside > 0 ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)"}`,
+                    }}>
+                      <div>
+                        <p style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 2 }}>الصعود المتبقي للهدف</p>
+                        <p style={{ fontSize: 18, fontWeight: 800, color: rec.remainingUpside > 0 ? "#22C55E" : "#EF4444" }}>
+                          {rec.remainingUpside > 0 ? "+" : ""}{rec.remainingUpside.toFixed(1)}%
+                        </p>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <p style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 2 }}>الدقة التاريخية</p>
+                        {rec.accuracyRecord && rec.accuracyRecord.total >= 2 ? (
+                          <p style={{ fontSize: 14, fontWeight: 700, color: "#818cf8" }}>
+                            {Math.round((rec.accuracyRecord.correct / rec.accuracyRecord.total) * 100)}%
+                            <span style={{ fontSize: 10, color: "var(--text-muted)", marginLeft: 4 }}>
+                              ({rec.accuracyRecord.correct}/{rec.accuracyRecord.total})
+                            </span>
+                          </p>
+                        ) : (
+                          <p style={{ fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>جديد</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12 }}>
+                      <span style={{ fontSize: 10, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 3 }}>
+                        <Clock size={9} /> منذ {rec.ageDays === 0 ? "اليوم" : `${rec.ageDays} يوم`}
+                      </span>
+                      <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                        نافذة {rec.predictionDays} يوم · ↑{rec.predictedHigh.toFixed(1)} ↓{rec.predictedLow.toFixed(1)}
+                      </span>
+                      <button
+                        onClick={() => predictKronos(rec.symbol)}
+                        style={{
+                          background: "rgba(99,102,241,0.12)", color: "#818cf8",
+                          border: "1px solid rgba(99,102,241,0.25)",
+                          padding: "4px 10px", borderRadius: 8,
+                          fontSize: 11, fontWeight: 600, cursor: "pointer",
+                          display: "flex", alignItems: "center", gap: 4,
+                          transition: "all 0.15s",
+                        }}
+                      >
+                        <BrainCircuit size={11} /> تحديث التوقع
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Note */}
+          {kronosRecs?.stats?.generatedAt && (
+            <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 16, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+              <Clock size={10} />
+              آخر تحديث: {new Date(kronosRecs.stats.generatedAt).toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" })}
+              &nbsp;·&nbsp;نقاط الاقتناع = الصعود المتوقع + دقة الماضي + حداثة التوقع
+            </p>
+          )}
         </div>
       )}
 
