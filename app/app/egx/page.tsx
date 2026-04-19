@@ -1034,7 +1034,7 @@ export default function EgxPage() {
                 استخدم زر <span style={{ color: "#818cf8", fontWeight: 700 }}>AI Forecast</span> على أي سهم في تبويب
                 <span style={{ color: "#EAB308", fontWeight: 700 }}> السوق</span> أو
                 <span style={{ color: "#22C55E", fontWeight: 700 }}> المحفظة</span>.<br />
-                Kronos سيحلل البيانات التاريخية ويتوقع مسار السعر خلال 120 يوماً،
+                Kronos سيحلل البيانات التاريخية ويتوقع مسار السعر لغداً (توقع يومي)،
                 وتظهر التوصيات هنا تلقائياً.
               </p>
             </div>
@@ -1237,7 +1237,7 @@ export default function EgxPage() {
                   <BrainCircuit size={18} /> مسار الذكاء الاصطناعي (Kronos-AI)
                 </h3>
                 <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
-                  {kronosSymbol} · توقعات {kronosData ? "120 يوم" : "..."}
+                  {kronosSymbol} · توقعات {kronosData ? "الغد" : "..."}
                 </p>
               </div>
               <button 
@@ -1268,7 +1268,7 @@ export default function EgxPage() {
                        const pct = ((lastPred - kronosData.currentPrice) / kronosData.currentPrice) * 100;
                        return (
                          <div style={{ flex: 1, background: "rgba(255,255,255,0.03)", padding: "12px", borderRadius: 10, textAlign: "center" }}>
-                            <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>الهدف (120D)</p>
+                            <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>هدف الغد</p>
                             <p style={{ fontSize: 16, fontWeight: 700, color: pct >= 0 ? "#22C55E" : "#EF4444" }}>
                                {lastPred.toFixed(2)} EGP <span style={{ fontSize: 12 }}>({pct > 0 ? "+" : ""}{pct.toFixed(2)}%)</span>
                             </p>

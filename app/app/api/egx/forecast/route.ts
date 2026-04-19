@@ -48,8 +48,8 @@ export async function generateForecast(symbol: string) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
            symbol: yahooSymbol,
-           lookback: 200, // Reduced from 400 to 200 to speed up CPU inference significantly
-           pred_len: 120, // next 120 days
+           lookback: 400,
+           pred_len: 1, // predict ONLY tomorrow
            freq: "1D",    // daily interval
            candles: candles
         })
@@ -78,7 +78,7 @@ export async function generateForecast(symbol: string) {
         predictedLow,
         predictedChangePercent: predictedChangePct,
         predictedEndPrice: endPrice,
-        predictionDays: 120,
+        predictionDays: 1,
       });
     } catch (e) {
       console.warn("Failed to log Kronos prediction to history:", e);
