@@ -4,13 +4,9 @@ import { logKronosPrediction } from "@/lib/redis";
 export const runtime = "nodejs";
 
 // Transform TV symbol like "COMI" to Yahoo "COMI.CA"
-export async function POST(req: Request) {
-  try {
-    const { symbol } = await req.json();
-    if (!symbol) return NextResponse.json({ error: "Symbol required" }, { status: 400 });
-
-    const yahooSymbol = `${symbol}.CA`;
-    const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=1d&range=2y`;
+export async function generateForecast(symbol: string) {
+  const yahooSymbol = `${symbol}.CA`;
+  const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=1d&range=2y`;
 
     const yRes = await fetch(yUrl, {
       headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
@@ -89,12 +85,21 @@ export async function POST(req: Request) {
     }
 
     // We only need the forecast array to return
-    return NextResponse.json({
+    return {
         ok: true,
         symbol,
         currentPrice,
         forecast: forecastArr,
-    });
+    };
+}
+
+export async function POST(req: Request) {
+  try {
+    const { symbol } = await req.json();
+    if (!symbol) return NextResponse.json({ error: "Symbol required" }, { status: 400 });
+    
+    const result = await generateForecast(symbol);
+    return NextResponse.json(result);
 
   } catch (err: any) {
     console.error("Kronos EGX Error:", err);
