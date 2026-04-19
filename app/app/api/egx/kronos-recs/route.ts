@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getKronosHistory, type KronosPredictionRecord } from "@/lib/redis";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 60; // fetches many Yahoo symbols in parallel
 
 /**
  * GET /api/egx/kronos-recs
@@ -59,6 +59,7 @@ export async function GET() {
           const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSym}?interval=1d&range=5d`;
           const res = await fetch(url, {
             headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+            signal: AbortSignal.timeout(10000), // prevent hang on slow Yahoo responses
           });
           if (!res.ok) return;
           const data = await res.json();

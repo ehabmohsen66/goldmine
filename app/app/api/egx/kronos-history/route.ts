@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getKronosHistory, updateKronosPrediction, type KronosPredictionRecord } from "@/lib/redis";
 
 export const runtime = "nodejs";
+export const maxDuration = 60; // may fetch many Yahoo prices for settlement
 
 /**
  * GET /api/egx/kronos-history
@@ -31,6 +32,7 @@ export async function GET() {
           const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=1d&range=5d`;
           const res = await fetch(url, {
             headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+            signal: AbortSignal.timeout(10000),
           });
           if (res.ok) {
             const data = await res.json();
@@ -84,6 +86,7 @@ export async function GET() {
           const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=1d&range=5d`;
           const res = await fetch(url, {
             headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+            signal: AbortSignal.timeout(10000),
           });
           if (res.ok) {
             const data = await res.json();

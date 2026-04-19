@@ -28,6 +28,7 @@ export async function GET() {
           const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSym}?interval=1d&range=5d`;
           const res = await fetch(url, {
             headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+            signal: AbortSignal.timeout(10000),
           });
           if (!res.ok) return;
           const data = await res.json();

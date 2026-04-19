@@ -87,7 +87,7 @@ export async function GET(request: Request) {
 
   // ── Step 2: Fetch all EGX stocks ─────────────────────────────────────────
   console.log("[egx] 🔍 Scanning EGX market...");
-  const stocks = await scanAllEgx(200);
+  const stocks = await scanAllEgx(250);
   await r.set(KEYS.EGX_LAST_SCAN, String(now));
 
   const portfolio = await getEgxPortfolio();
