@@ -18,12 +18,6 @@ try:
     print(f"Loading Kronos on {device}...")
     tokenizer = KronosTokenizer.from_pretrained("NeoQuasar/Kronos-Tokenizer-base")
     _model = Kronos.from_pretrained("NeoQuasar/Kronos-base").to(device); _model.eval()
-    
-    if device == "cpu":
-        print("Applying dynamic INT8 quantization for CPU speedup...")
-        _model = torch.ao.quantization.quantize_dynamic(
-            _model, {torch.nn.Linear}, dtype=torch.qint8
-        )
         
     predictor = KronosPredictor(_model, tokenizer, max_context=512)
     print("Kronos loaded successfully.")

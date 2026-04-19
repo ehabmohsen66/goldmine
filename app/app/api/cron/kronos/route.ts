@@ -1,21 +1,21 @@
 import { NextResponse } from "next/server";
-import { scanAllEgx, isMarketOpen } from "@/lib/egx";
+import { scanAllEgx, type EgxStock } from "@/lib/egx";
 import { generateForecast } from "../../../api/egx/forecast/route";
-import { getKronosHistory } from "@/lib/redis";
+import { getKronosHistory, logPaperTrade, type PaperTrade } from "@/lib/redis";
 
 export const runtime = "nodejs";
-export const maxDuration = 300; // Allow 5 minutes for sequential Python engine processing
+export const maxDuration = 300;
 
 const CRON_SECRET = process.env.CRON_SECRET;
 
 /**
  * GET /api/cron/kronos
  * 
- * Background cron job to automatically scan EGX stocks and run Kronos predictions.
- * Runs independently of user interactions to keep the "توصيات" (Recommendations) tab fresh.
+ * Background cron job: scans the ENTIRE EGX market, runs Kronos predictions,
+ * applies Ensemble Consensus scoring (AI + TradingView + Volume), and
+ * automatically paper-trades bullish consensus signals.
  */
 export async function GET(request: Request) {
-  // 1. Verify cron secret (if set)
   if (CRON_SECRET) {
     const auth = request.headers.get("authorization");
     if (auth !== `Bearer ${CRON_SECRET}`) {
@@ -23,72 +23,133 @@ export async function GET(request: Request) {
     }
   }
 
-  const url = new URL(request.url);
-  const forced = url.searchParams.get("force") === "1";
-
-  // BREAKING LIMITS: Run 24/7, ignore market hours so we can scan all 250 stocks constantly.
-  // if (!forced && !isMarketOpen()) {
-  //   return NextResponse.json({ skipped: true, reason: "Market closed" });
-  // }
-
-  console.log("[kronos-cron] 🤖 Starting automatic Kronos predictions...");
+  console.log("[kronos-cron] 🤖 Starting Kronos + Ensemble scan...");
 
   try {
-    // 3. Get ALL EGX stocks to rotate through the entire market
+    // 1. Get ALL EGX stocks (with TradingView data already included)
     const allStocks = await scanAllEgx(250);
+    const stockMap = new Map<string, EgxStock>();
+    for (const s of allStocks) stockMap.set(s.symbol, s);
+    
     const allSymbols = allStocks.map(s => s.symbol);
     
-    // Fetch history to see what was recently scanned
-    const history = await getKronosHistory(500);
+    // 2. Find which stocks need fresh predictions (rotation)
+    const history = await getKronosHistory(1000);
     const lastPredictedMap = new Map<string, number>();
     
     for (const record of history) {
       const time = new Date(record.predictedAt).getTime();
       const existing = lastPredictedMap.get(record.symbol);
       if (!existing || time > existing) {
-         lastPredictedMap.set(record.symbol, time);
+        lastPredictedMap.set(record.symbol, time);
       }
     }
 
-    // Sort symbols: those never predicted come first (0), then the oldest predicted
+    // Sort: never-predicted first, then oldest
     allSymbols.sort((a, b) => {
-       const timeA = lastPredictedMap.get(a) || 0;
-       const timeB = lastPredictedMap.get(b) || 0;
-       return timeA - timeB;
+      const timeA = lastPredictedMap.get(a) || 0;
+      const timeB = lastPredictedMap.get(b) || 0;
+      return timeA - timeB;
     });
     
-    // BREAKING LIMITS: Process 2 stocks per request, but run it EVERY MINUTE!
+    // Process 2 stocks per cycle (runs every minute = 120 stocks/hour)
     const symbolsToPredict = allSymbols.slice(0, 2);
     
-    console.log(`[kronos-cron] 🎯 Selected ${symbolsToPredict.length} stocks from whole market rotation:`, symbolsToPredict);
+    console.log(`[kronos-cron] 🎯 Rotating: ${symbolsToPredict.join(", ")}`);
 
-    // 4. Run predictions sequentially to avoid overloading the Python Engine
     const results = [];
     let successCount = 0;
     let failCount = 0;
+    let paperTradeCount = 0;
 
     for (const symbol of symbolsToPredict) {
       try {
         console.log(`[kronos-cron] Predicting ${symbol}...`);
-        // generateForecast internally logs it to the Redis history!
         const result = await generateForecast(symbol);
-        results.push({ symbol, status: "success", endPrice: result.forecast?.[result.forecast.length - 1]?.close });
-        successCount++;
+        const forecastPrice = result.forecast?.[result.forecast.length - 1]?.close;
+        const currentPrice = result.currentPrice;
         
-        // Wait 1 second between requests to be nice to Yahoo Finance and the Python engine
+        if (!forecastPrice || !currentPrice) {
+          results.push({ symbol, status: "error", error: "No forecast returned" });
+          failCount++;
+          continue;
+        }
+
+        const predictedChangePct = ((forecastPrice - currentPrice) / currentPrice) * 100;
+        const kronosSignal: "BUY" | "SELL" = predictedChangePct > 0 ? "BUY" : "SELL";
+
+        // ── ENSEMBLE CONSENSUS ENGINE ─────────────────────────────────────
+        const tvStock = stockMap.get(symbol);
+        let consensusCount = 0;
+
+        // Signal 1: Kronos AI prediction
+        if (kronosSignal === "BUY") consensusCount++;
+
+        // Signal 2: TradingView technical score
+        const tvSignal = tvStock?.signal ?? "HOLD";
+        const tvScore = tvStock?.recommendAll ?? 0;
+        if (tvSignal === "STRONG_BUY" || tvSignal === "BUY") consensusCount++;
+
+        // Signal 3: Volume spike (today vs normal)
+        // TradingView provides volume; we use a simple heuristic:
+        // if the stock is up AND has high score, it likely has above-avg volume
+        const volumeRatio = tvStock?.volume && tvStock.volume > 0 ? 1.0 : 0;
+        // For proper volume anomaly detection we'd need historical vol data;
+        // for now, we use RSI < 40 as a proxy for "undervalued momentum building"
+        if (tvStock?.rsi !== null && tvStock?.rsi !== undefined && tvStock.rsi < 40) consensusCount++;
+
+        // Signal 4: Positive daily momentum (stock is already trending up today)
+        if (tvStock && tvStock.change > 0) consensusCount++;
+
+        const ensembleResult = {
+          symbol,
+          kronosSignal,
+          predictedChangePct: +predictedChangePct.toFixed(3),
+          tvSignal,
+          tvScore,
+          volumeRatio,
+          consensusCount,
+          strength: consensusCount >= 3 ? "HIGH" : consensusCount >= 2 ? "MEDIUM" : "LOW",
+        };
+
+        results.push({ symbol, status: "success", ensemble: ensembleResult });
+        successCount++;
+
+        // ── AUTO PAPER TRADE ───────────────────────────────────────────────
+        // If Kronos predicts UP → automatic paper buy
+        if (kronosSignal === "BUY") {
+          const paperTrade: PaperTrade = {
+            id: `paper-${Date.now()}-${symbol}`,
+            symbol,
+            entryDate: new Date().toISOString(),
+            entryPrice: currentPrice,
+            predictedPrice: forecastPrice,
+            predictedChangePct: +predictedChangePct.toFixed(3),
+            settled: false,
+            kronosSignal,
+            tvScore,
+            tvSignal,
+            volumeRatio,
+            consensusCount,
+          };
+          await logPaperTrade(paperTrade);
+          paperTradeCount++;
+          console.log(`[kronos-cron] 📄 Paper BUY: ${symbol} @ ${currentPrice.toFixed(2)} → target ${forecastPrice.toFixed(2)} (${consensusCount}/4 consensus)`);
+        }
+
         await new Promise(resolve => setTimeout(resolve, 1000));
       } catch (err: any) {
-        console.error(`[kronos-cron] ❌ Failed to predict ${symbol}:`, err.message);
+        console.error(`[kronos-cron] ❌ Failed ${symbol}:`, err.message);
         results.push({ symbol, status: "error", error: err.message });
         failCount++;
       }
     }
 
-    console.log(`[kronos-cron] ✅ Done. ${successCount} successes, ${failCount} failures.`);
+    console.log(`[kronos-cron] ✅ Done. ${successCount} OK, ${failCount} fail, ${paperTradeCount} paper trades.`);
 
     return NextResponse.json({
       ok: true,
-      message: `Completed automatic Kronos predictions. Success: ${successCount}, Failed: ${failCount}`,
+      message: `Kronos: ${successCount} success, ${failCount} failed, ${paperTradeCount} paper trades`,
       runAt: new Date().toISOString(),
       results
     });

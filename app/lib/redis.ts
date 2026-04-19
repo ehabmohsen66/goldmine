@@ -76,11 +76,11 @@ export interface KronosPredictionRecord {
   directionCorrect?: boolean;     // did Kronos get the direction right?
 }
 
-/** Save a new prediction to history (capped at 200) */
+/** Save a new prediction to history (capped at 1000 for full market coverage) */
 export async function logKronosPrediction(record: KronosPredictionRecord): Promise<void> {
   const r = getRedis();
   await r.lpush(KEYS.KRONOS_HISTORY, JSON.stringify(record));
-  await r.ltrim(KEYS.KRONOS_HISTORY, 0, 199);
+  await r.ltrim(KEYS.KRONOS_HISTORY, 0, 999);
 }
 
 /** Get all prediction history */
@@ -93,12 +93,64 @@ export async function getKronosHistory(limit = 100): Promise<KronosPredictionRec
 /** Update a prediction record by id (for actual price check) */
 export async function updateKronosPrediction(id: string, update: Partial<KronosPredictionRecord>): Promise<void> {
   const r = getRedis();
-  const all = await r.lrange(KEYS.KRONOS_HISTORY, 0, 199);
+  const all = await r.lrange(KEYS.KRONOS_HISTORY, 0, 999);
   for (let i = 0; i < all.length; i++) {
     const item: KronosPredictionRecord = typeof all[i] === "string" ? JSON.parse(all[i] as string) : all[i] as unknown as KronosPredictionRecord;
     if (item.id === id) {
       const updated = { ...item, ...update };
       await r.lset(KEYS.KRONOS_HISTORY, i, JSON.stringify(updated));
+      break;
+    }
+  }
+}
+
+// ── Paper Trading P&L Tracker ────────────────────────────────────────────────
+export interface PaperTrade {
+  id: string;
+  symbol: string;
+  entryDate: string;           // ISO when paper buy was made
+  entryPrice: number;          // price at paper buy
+  predictedPrice: number;      // what Kronos predicted
+  predictedChangePct: number;  // predicted % change
+  exitDate?: string;           // ISO when paper sell happened
+  exitPrice?: number;          // actual price at market close next day
+  pnlPct?: number;             // actual % change (P&L)
+  pnlEgp?: number;             // P&L in EGP (per 1000 EGP invested)
+  settled: boolean;            // true when checked against actual price
+  directionCorrect?: boolean;  // was the prediction right?
+  // Ensemble signals at time of trade
+  kronosSignal?: "BUY" | "SELL";
+  tvScore?: number;            // TradingView Recommend.All (-1 to +1)
+  tvSignal?: string;           // STRONG_BUY, BUY, HOLD, SELL, STRONG_SELL
+  volumeRatio?: number;        // today volume / 30d avg volume
+  consensusCount?: number;     // how many signals agreed (out of 4)
+}
+
+const PAPER_TRADES_KEY = "kronos:paper_trades";
+
+/** Log a new paper trade */
+export async function logPaperTrade(trade: PaperTrade): Promise<void> {
+  const r = getRedis();
+  await r.lpush(PAPER_TRADES_KEY, JSON.stringify(trade));
+  await r.ltrim(PAPER_TRADES_KEY, 0, 999);
+}
+
+/** Get paper trades */
+export async function getPaperTrades(limit = 200): Promise<PaperTrade[]> {
+  const r = getRedis();
+  const raw = await r.lrange(PAPER_TRADES_KEY, 0, limit - 1);
+  return raw.map(item => (typeof item === "string" ? JSON.parse(item) : item));
+}
+
+/** Update a paper trade by id */
+export async function updatePaperTrade(id: string, update: Partial<PaperTrade>): Promise<void> {
+  const r = getRedis();
+  const all = await r.lrange(PAPER_TRADES_KEY, 0, 999);
+  for (let i = 0; i < all.length; i++) {
+    const item: PaperTrade = typeof all[i] === "string" ? JSON.parse(all[i] as string) : all[i] as unknown as PaperTrade;
+    if (item.id === id) {
+      const updated = { ...item, ...update };
+      await r.lset(PAPER_TRADES_KEY, i, JSON.stringify(updated));
       break;
     }
   }

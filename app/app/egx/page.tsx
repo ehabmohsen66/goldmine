@@ -6,7 +6,8 @@ import {
   TrendingUp, TrendingDown, RefreshCw, BarChart3,
   Activity, AlertTriangle, ChevronLeft, Zap, Clock,
   ArrowUpRight, ArrowDownRight, Briefcase, Bell, BrainCircuit, X,
-  Brain, CheckCircle2, XCircle, Target, Sparkles, TrendingUp as TrendUp
+  Brain, CheckCircle2, XCircle, Target, Sparkles, TrendingUp as TrendUp,
+  DollarSign, Trophy, Percent
 } from "lucide-react";
 import dynamic from "next/dynamic";
 
@@ -238,7 +239,7 @@ function MoodBar({ bullish, neutral, bearish }: { bullish: number; neutral: numb
 export default function EgxPage() {
   const [data, setData]             = useState<EgxBriefResponse | null>(null);
   const [loading, setLoading]       = useState(true);
-  const [tab, setTab]               = useState<"market" | "portfolio" | "history" | "kronos" | "recs">("market");
+  const [tab, setTab]               = useState<"market" | "portfolio" | "history" | "kronos" | "recs" | "paper">("market");
   const [strongBuyOnly, setStrongBuyOnly] = useState(false);
   
   // AI Upload State
@@ -284,6 +285,23 @@ export default function EgxPage() {
   useEffect(() => {
     if (tab === "recs" && !kronosRecs) fetchKronosRecs();
   }, [tab, kronosRecs, fetchKronosRecs]);
+
+  // Paper Trading Tab State
+  const [paperData, setPaperData] = useState<any | null>(null);
+  const [paperLoading, setPaperLoading] = useState(false);
+
+  const fetchPaperTrades = useCallback(async () => {
+    setPaperLoading(true);
+    try {
+      const res = await fetch("/api/egx/paper-trades");
+      if (res.ok) setPaperData(await res.json());
+    } catch { /* silent */ }
+    finally { setPaperLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    if (tab === "paper" && !paperData) fetchPaperTrades();
+  }, [tab, paperData, fetchPaperTrades]);
 
   const predictKronos = async (symbol: string) => {
     setKronosSymbol(symbol);
@@ -512,6 +530,10 @@ export default function EgxPage() {
         <button style={TAB_STYLE(tab === "recs")} onClick={() => setTab("recs")}>
           <Sparkles size={12} style={{ display: "inline", marginRight: 5 }} />
           توصيات
+        </button>
+        <button style={{...TAB_STYLE(tab === "paper"), background: tab === "paper" ? "rgba(34,197,94,0.15)" : "transparent", color: tab === "paper" ? "#22C55E" : "var(--text-muted)", outline: tab === "paper" ? "1px solid rgba(34,197,94,0.3)" : "none"}} onClick={() => setTab("paper")}>
+          <DollarSign size={12} style={{ display: "inline", marginRight: 5 }} />
+          Paper P&L
         </button>
       </div>
 
@@ -1294,6 +1316,199 @@ export default function EgxPage() {
                    />
                  </div>
                </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── PAPER TRADING P&L TAB ── */}
+      {tab === "paper" && (
+        <div>
+          {/* Stats Overview */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12, marginBottom: 20 }}>
+            {/* Total P&L */}
+            <div className="glass-card" style={{
+              padding: "20px", textAlign: "center",
+              background: (paperData?.stats?.totalPnlPct ?? 0) >= 0
+                ? "linear-gradient(135deg, rgba(34,197,94,0.1) 0%, rgba(34,197,94,0.03) 100%)"
+                : "linear-gradient(135deg, rgba(239,68,68,0.1) 0%, rgba(239,68,68,0.03) 100%)",
+              border: `1px solid ${(paperData?.stats?.totalPnlPct ?? 0) >= 0 ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)"}`,
+            }}>
+              <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>إجمالي العائد</p>
+              {paperLoading ? <div className="skeleton" style={{ width: 80, height: 36, margin: "0 auto" }} /> : (
+                <p style={{ fontSize: 28, fontWeight: 800, color: (paperData?.stats?.totalPnlPct ?? 0) >= 0 ? "#22C55E" : "#EF4444" }}>
+                  {(paperData?.stats?.totalPnlPct ?? 0) > 0 ? "+" : ""}{paperData?.stats?.totalPnlPct ?? 0}%
+                </p>
+              )}
+              <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>
+                {(paperData?.stats?.totalPnlEgp ?? 0) > 0 ? "+" : ""}{paperData?.stats?.totalPnlEgp ?? 0} EGP / 1000
+              </p>
+            </div>
+
+            {/* Win Rate */}
+            <div className="glass-card" style={{ padding: "20px", textAlign: "center" }}>
+              <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>نسبة النجاح</p>
+              {paperLoading ? <div className="skeleton" style={{ width: 60, height: 36, margin: "0 auto" }} /> : (
+                <p style={{ fontSize: 28, fontWeight: 800, color: (paperData?.stats?.winRate ?? 0) >= 50 ? "#22C55E" : "#EF4444" }}>
+                  {paperData?.stats?.winRate ?? "—"}{paperData?.stats?.winRate !== null ? "%" : ""}
+                </p>
+              )}
+              <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>
+                ✅ {paperData?.stats?.wins ?? 0} ربح · ❌ {paperData?.stats?.losses ?? 0} خسارة
+              </p>
+            </div>
+
+            {/* Total Trades */}
+            <div className="glass-card" style={{ padding: "20px", textAlign: "center" }}>
+              <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>إجمالي الصفقات</p>
+              {paperLoading ? <div className="skeleton" style={{ width: 40, height: 36, margin: "0 auto" }} /> : (
+                <p style={{ fontSize: 28, fontWeight: 800, color: "var(--text-primary)" }}>
+                  {paperData?.stats?.totalTrades ?? 0}
+                </p>
+              )}
+              <p style={{ fontSize: 10, color: "#818cf8", marginTop: 4 }}>
+                ⏳ {paperData?.stats?.pendingTrades ?? 0} قيد الانتظار
+              </p>
+            </div>
+
+            {/* High Consensus Win Rate */}
+            <div className="glass-card" style={{
+              padding: "20px", textAlign: "center",
+              background: "linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(139,92,246,0.04) 100%)",
+              border: "1px solid rgba(99,102,241,0.2)",
+            }}>
+              <p style={{ fontSize: 11, color: "#818cf8", marginBottom: 6 }}>دقة الإجماع العالي</p>
+              {paperLoading ? <div className="skeleton" style={{ width: 60, height: 36, margin: "0 auto" }} /> : (
+                <p style={{ fontSize: 28, fontWeight: 800, color: "#818cf8" }}>
+                  {paperData?.stats?.highConsensusWinRate ?? "—"}{paperData?.stats?.highConsensusWinRate !== null ? "%" : ""}
+                </p>
+              )}
+              <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>
+                3/4+ إشارات متفقة ({paperData?.stats?.highConsensusTrades ?? 0} صفقة)
+              </p>
+            </div>
+          </div>
+
+          {/* Compounding Simulator */}
+          <div className="glass-card" style={{
+            padding: "20px 24px", marginBottom: 20,
+            background: "linear-gradient(135deg, rgba(234,179,8,0.08) 0%, rgba(234,179,8,0.02) 100%)",
+            border: "1px solid rgba(234,179,8,0.2)",
+          }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: "#EAB308", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+              <Trophy size={14} /> محاكاة الأرباح المركبة
+            </p>
+            {paperLoading ? <div className="skeleton" style={{ width: "100%", height: 50 }} /> : (
+              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+                <div style={{ textAlign: "center" }}>
+                  <p style={{ fontSize: 10, color: "var(--text-muted)" }}>رأس المال الابتدائي</p>
+                  <p style={{ fontSize: 20, fontWeight: 700, color: "var(--text-primary)" }}>
+                    {(paperData?.stats?.startingBalance ?? 10000).toLocaleString()} EGP
+                  </p>
+                </div>
+                <span style={{ fontSize: 24, color: "var(--text-muted)" }}>→</span>
+                <div style={{ textAlign: "center" }}>
+                  <p style={{ fontSize: 10, color: "var(--text-muted)" }}>القيمة بعد تتبع كل إشارة</p>
+                  <p style={{ fontSize: 24, fontWeight: 800, color: (paperData?.stats?.compoundedReturnPct ?? 0) >= 0 ? "#22C55E" : "#EF4444" }}>
+                    {(paperData?.stats?.compoundedBalance ?? 10000).toLocaleString()} EGP
+                  </p>
+                </div>
+                <span style={{
+                  fontSize: 15, fontWeight: 800, padding: "6px 16px", borderRadius: 20,
+                  background: (paperData?.stats?.compoundedReturnPct ?? 0) >= 0 ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)",
+                  color: (paperData?.stats?.compoundedReturnPct ?? 0) >= 0 ? "#22C55E" : "#EF4444",
+                  border: `1px solid ${(paperData?.stats?.compoundedReturnPct ?? 0) >= 0 ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}`,
+                }}>
+                  {(paperData?.stats?.compoundedReturnPct ?? 0) > 0 ? "+" : ""}{paperData?.stats?.compoundedReturnPct ?? 0}%
+                </span>
+              </div>
+            )}
+            <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 10, textAlign: "center" }}>
+              لو استثمرت 10,000 جنيه واتبعت كل إشارة Kronos AI مع إعادة استثمار الأرباح
+            </p>
+          </div>
+
+          {/* Trade History */}
+          <div className="glass-card" style={{ padding: 24 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: 10,
+                background: "linear-gradient(135deg, #22C55E 0%, #16a34a 100%)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                boxShadow: "0 0 14px rgba(34,197,94,0.4)",
+              }}>
+                <DollarSign size={16} color="#fff" />
+              </div>
+              <div>
+                <h2 style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>سجل Paper Trading</h2>
+                <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 1 }}>كل صفقة ورقية تلقائية من Kronos AI + Ensemble</p>
+              </div>
+              <button className="btn-ghost" onClick={() => { setPaperData(null); fetchPaperTrades(); }}
+                style={{ marginLeft: "auto", padding: "6px 12px", display: "flex", alignItems: "center", gap: 5, fontSize: 12 }}>
+                <RefreshCw size={12} /> تحديث
+              </button>
+            </div>
+
+            {paperLoading ? (
+              [...Array(5)].map((_, i) => <div key={i} className="skeleton" style={{ height: 60, borderRadius: 12, marginBottom: 8 }} />)
+            ) : !paperData?.trades?.length ? (
+              <div style={{ textAlign: "center", padding: "50px 20px", color: "var(--text-muted)" }}>
+                <DollarSign size={40} style={{ margin: "0 auto 16px", opacity: 0.2 }} />
+                <p style={{ fontSize: 15, fontWeight: 600 }}>لا توجد صفقات ورقية بعد</p>
+                <p style={{ fontSize: 12, marginTop: 8, lineHeight: 1.5 }}>
+                  عندما يتوقع Kronos AI ارتفاع سهم، سيفتح صفقة ورقية تلقائياً<br />
+                  ويتحقق من النتيجة بعد 24 ساعة
+                </p>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {paperData.trades.map((trade: any, i: number) => {
+                  const isSettled = trade.settled;
+                  const isWin = trade.directionCorrect === true;
+                  const bc = isSettled ? (isWin ? "rgba(34,197,94,0.2)" : "rgba(239,68,68,0.2)") : "rgba(99,102,241,0.15)";
+                  const bg = isSettled ? (isWin ? "rgba(34,197,94,0.03)" : "rgba(239,68,68,0.03)") : "rgba(99,102,241,0.03)";
+                  return (
+                    <div key={trade.id || i} style={{
+                      padding: "12px 16px", borderRadius: 12,
+                      background: bg, border: `1px solid ${bc}`,
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                      flexWrap: "wrap", gap: 8,
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontSize: 18 }}>{isSettled ? (isWin ? "✅" : "❌") : "⏳"}</span>
+                        <div>
+                          <span style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)" }}>{trade.symbol}</span>
+                          <span style={{ fontSize: 10, color: "var(--text-muted)", marginLeft: 6 }}>
+                            {new Date(trade.entryDate).toLocaleDateString("ar-EG", { month: "short", day: "numeric" })}
+                          </span>
+                          <div style={{ display: "flex", gap: 8, marginTop: 3, fontSize: 10, color: "var(--text-muted)" }}>
+                            <span>دخول: {trade.entryPrice?.toFixed(2)}</span>
+                            {trade.exitPrice && <span>خروج: {trade.exitPrice?.toFixed(2)}</span>}
+                            <span>هدف: {trade.predictedPrice?.toFixed(2)}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{
+                          fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 12,
+                          background: (trade.consensusCount ?? 0) >= 3 ? "rgba(34,197,94,0.12)" : (trade.consensusCount ?? 0) >= 2 ? "rgba(234,179,8,0.12)" : "rgba(255,255,255,0.05)",
+                          color: (trade.consensusCount ?? 0) >= 3 ? "#22C55E" : (trade.consensusCount ?? 0) >= 2 ? "#EAB308" : "var(--text-muted)",
+                          border: `1px solid ${(trade.consensusCount ?? 0) >= 3 ? "rgba(34,197,94,0.25)" : (trade.consensusCount ?? 0) >= 2 ? "rgba(234,179,8,0.25)" : "rgba(255,255,255,0.1)"}`,
+                        }}>
+                          {trade.consensusCount ?? 0}/4 إجماع
+                        </span>
+                        {isSettled ? (
+                          <span style={{ fontSize: 13, fontWeight: 800, color: (trade.pnlPct ?? 0) >= 0 ? "#22C55E" : "#EF4444" }}>
+                            {(trade.pnlPct ?? 0) > 0 ? "+" : ""}{trade.pnlPct?.toFixed(2)}%
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: 11, color: "#818cf8", fontWeight: 600 }}>قيد الانتظار</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         </div>
