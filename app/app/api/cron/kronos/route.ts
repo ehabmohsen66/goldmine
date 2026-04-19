@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { scanAllEgx, type EgxStock } from "@/lib/egx";
 import { generateForecast } from "../../../api/egx/forecast/route";
-import { getKronosHistory, logPaperTrade, type PaperTrade } from "@/lib/redis";
+import { getKronosHistory, getPaperTrades, logPaperTrade, type PaperTrade } from "@/lib/redis";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -54,6 +54,14 @@ export async function GET(request: Request) {
     
     // Process 2 stocks per cycle (runs every minute = 120 stocks/hour)
     const symbolsToPredict = allSymbols.slice(0, 2);
+
+    // Bug fix: load existing paper trades to prevent duplicate paper trades per symbol per day
+    const existingPaperTrades = await getPaperTrades(500);
+    const recentPaperTradeSymbols = new Set(
+      existingPaperTrades
+        .filter(t => !t.settled && Date.now() - new Date(t.entryDate).getTime() < 24 * 60 * 60 * 1000)
+        .map(t => t.symbol)
+    );
     
     console.log(`[kronos-cron] 🎯 Rotating: ${symbolsToPredict.join(", ")}`);
 
@@ -90,13 +98,11 @@ export async function GET(request: Request) {
         const tvScore = tvStock?.recommendAll ?? 0;
         if (tvSignal === "STRONG_BUY" || tvSignal === "BUY") consensusCount++;
 
-        // Signal 3: Volume spike (today vs normal)
-        // TradingView provides volume; we use a simple heuristic:
-        // if the stock is up AND has high score, it likely has above-avg volume
-        const volumeRatio = tvStock?.volume && tvStock.volume > 0 ? 1.0 : 0;
-        // For proper volume anomaly detection we'd need historical vol data;
-        // for now, we use RSI < 40 as a proxy for "undervalued momentum building"
-        if (tvStock?.rsi !== null && tvStock?.rsi !== undefined && tvStock.rsi < 40) consensusCount++;
+        // Signal 3: RSI oversold proxy (RSI < 40 = undervalued, momentum building)
+        // True volume anomaly detection requires 30-day avg data from Yahoo.
+        // We use RSI as the best available proxy from the TradingView screener.
+        const volumeRatio = tvStock?.volume ?? 0; // raw volume for display
+        if (tvStock?.rsi !== null && tvStock?.rsi !== undefined && tvStock.rsi < 40) consensusCount++
 
         // Signal 4: Positive daily momentum (stock is already trending up today)
         if (tvStock && tvStock.change > 0) consensusCount++;
@@ -116,8 +122,9 @@ export async function GET(request: Request) {
         successCount++;
 
         // ── AUTO PAPER TRADE ───────────────────────────────────────────────
-        // If Kronos predicts UP → automatic paper buy
-        if (kronosSignal === "BUY") {
+        // Bug fix: Only open ONE paper trade per symbol per 24-hour cycle.
+        // Previously a new trade was created every minute when the stock was re-scanned.
+        if (kronosSignal === "BUY" && !recentPaperTradeSymbols.has(symbol)) {
           const paperTrade: PaperTrade = {
             id: `paper-${Date.now()}-${symbol}`,
             symbol,
@@ -133,8 +140,11 @@ export async function GET(request: Request) {
             consensusCount,
           };
           await logPaperTrade(paperTrade);
+          recentPaperTradeSymbols.add(symbol); // prevent duplicates within same cron batch
           paperTradeCount++;
           console.log(`[kronos-cron] 📄 Paper BUY: ${symbol} @ ${currentPrice.toFixed(2)} → target ${forecastPrice.toFixed(2)} (${consensusCount}/4 consensus)`);
+        } else if (kronosSignal === "BUY") {
+          console.log(`[kronos-cron] ⏭️ Skipped duplicate paper trade for ${symbol} (already open today)`);
         }
 
         await new Promise(resolve => setTimeout(resolve, 1000));

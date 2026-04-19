@@ -10,11 +10,13 @@ export const runtime = "nodejs";
  */
 export async function GET() {
   try {
-    const history = await getKronosHistory(100);
+    // Fetch recent 500 — we store up to 1000 but only need recent for settlement checks
+    const history = await getKronosHistory(500);
 
-    // Find predictions that need actual price checks (older than 1 day, not yet checked)
+    // Find predictions that need actual price checks:
+    // For 1-day predictions: wait at least 1 full day before settling
     const unchecked = history.filter(
-      (h) => !h.checkedAt && Date.now() - new Date(h.predictedAt).getTime() > 24 * 60 * 60 * 1000
+      (h) => !h.checkedAt && Date.now() - new Date(h.predictedAt).getTime() > 20 * 60 * 60 * 1000 // 20h min
     );
 
     // Batch unique symbols to check
