@@ -1120,7 +1120,7 @@ export default function EgxPage() {
                       </div>
                       <div style={{ padding: "8px 10px", background: "rgba(99,102,241,0.06)", borderRadius: 10, border: "1px solid rgba(99,102,241,0.12)" }}>
                         <p style={{ fontSize: 9, color: "#818cf8", marginBottom: 3, display: "flex", alignItems: "center", gap: 2, letterSpacing: "0.05em", textTransform: "uppercase" }}>
-                          <Target size={8} /> هدف Kronos
+                          <Target size={8} /> هدف إغلاق الغد
                         </p>
                         <p style={{ fontSize: 13, fontWeight: 700, color: "#22C55E" }}>
                           {rec.predictedEndPrice.toFixed(2)}
@@ -1179,7 +1179,7 @@ export default function EgxPage() {
                         <Clock size={9} /> منذ {rec.ageDays === 0 ? "اليوم" : `${rec.ageDays} يوم`}
                       </span>
                       <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
-                        نافذة {rec.predictionDays} يوم · ↑{rec.predictedHigh.toFixed(1)} ↓{rec.predictedLow.toFixed(1)}
+                        إطار زمني: {rec.predictionDays} يوم (تداول) · ↑{rec.predictedHigh.toFixed(1)} ↓{rec.predictedLow.toFixed(1)}
                       </span>
                       <button
                         onClick={() => predictKronos(rec.symbol)}
