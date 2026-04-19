@@ -18,6 +18,13 @@ try:
     print(f"Loading Kronos on {device}...")
     tokenizer = KronosTokenizer.from_pretrained("NeoQuasar/Kronos-Tokenizer-base")
     _model = Kronos.from_pretrained("NeoQuasar/Kronos-base").to(device); _model.eval()
+    
+    if device == "cpu":
+        print("Applying dynamic INT8 quantization for CPU speedup...")
+        _model = torch.ao.quantization.quantize_dynamic(
+            _model, {torch.nn.Linear}, dtype=torch.qint8
+        )
+        
     predictor = KronosPredictor(_model, tokenizer, max_context=512)
     print("Kronos loaded successfully.")
 except Exception as e:
@@ -83,15 +90,16 @@ def predict(request: PredictRequest):
         )[1:])
         
         with predict_lock:
-            pred_df = predictor.predict(
-                df=x_df,
-                x_timestamp=x_timestamp,
-                y_timestamp=y_timestamp,
-                pred_len=request.pred_len,
-                T=1.0, 
-                top_p=0.9,
-                sample_count=1
-            )
+            with torch.inference_mode():
+                pred_df = predictor.predict(
+                    df=x_df,
+                    x_timestamp=x_timestamp,
+                    y_timestamp=y_timestamp,
+                    pred_len=request.pred_len,
+                    T=1.0, 
+                    top_p=0.9,
+                    sample_count=1
+                )
         
         # Format response
         result = pred_df.reset_index(names='timestamp')

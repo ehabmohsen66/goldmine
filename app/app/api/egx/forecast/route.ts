@@ -48,7 +48,7 @@ export async function generateForecast(symbol: string) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
            symbol: yahooSymbol,
-           lookback: 400,
+           lookback: 200, // Reduced from 400 to 200 to speed up CPU inference significantly
            pred_len: 120, // next 120 days
            freq: "1D",    // daily interval
            candles: candles
