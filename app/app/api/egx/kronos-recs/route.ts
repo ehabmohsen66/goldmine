@@ -15,7 +15,7 @@ export const maxDuration = 30;
  */
 export async function GET() {
   try {
-    const history = await getKronosHistory(200);
+    const history = await getKronosHistory(1000); // fetch all to ensure rotation covers full market
 
     if (!history.length) {
       return NextResponse.json({ recommendations: [], stats: { totalSymbols: 0 } });
@@ -96,9 +96,9 @@ export async function GET() {
         ? (symAcc.correct / symAcc.total) * 20  // up to +20 points
         : 10; // neutral bonus for new symbols
 
-      // Freshness: predictions older than 30 days lose confidence
+      // Freshness: for 1-day predictions, decay 3pts/day (still visible for ~33 days)
       const agedays = (Date.now() - new Date(rec.predictedAt).getTime()) / (1000 * 60 * 60 * 24);
-      const freshnessScore = Math.max(0, 100 - agedays * 2); // decay 2pts/day
+      const freshnessScore = Math.max(0, 100 - agedays * 3);
 
       // Entry quality: is current price a good entry vs prediction price?
       // If live price < prediction price it's actually a better entry

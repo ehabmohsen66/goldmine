@@ -122,7 +122,7 @@ export async function scanAllEgx(limit = 200): Promise<EgxStock[]> {
     markets: ["egypt"],
     options: { lang: "en" },
     range: [0, limit],
-    sort: { sortBy: "Recommend.All", sortOrder: "desc" },
+    sort: { sortBy: "name", sortOrder: "asc" }, // alphabetical for fair full-market rotation
     symbols: {},
   };
 
@@ -217,7 +217,7 @@ export async function getEgxDailyBrief(): Promise<{
   neutralCount: number;
   totalScanned: number;
 }> {
-  const all = await scanAllEgx(200);
+  const all = await scanAllEgx(250); // scan full market
 
   const bullish = all.filter(s => s.signal === "BUY" || s.signal === "STRONG_BUY");
   const bearish = all.filter(s => s.signal === "SELL" || s.signal === "STRONG_SELL");
