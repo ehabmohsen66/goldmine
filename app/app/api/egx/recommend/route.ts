@@ -50,7 +50,7 @@ export async function POST(req: Request) {
     } catch { /* ignore redis error */ }
 
     if (!allStocks) {
-      allStocks = await scanAllEgx(200);
+      allStocks = await scanAllEgx(250);
       try {
         await r.set(CACHE_KEY, { data: allStocks, ts: Date.now() }, { ex: 600 });
       } catch { /* ignore redis error */ }

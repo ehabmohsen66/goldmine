@@ -178,7 +178,8 @@ export async function GET(request: Request) {
         const reqBody = { symbol: "GOLD_EGP", candles, lookback: 120, pred_len: 60, freq: "1min" };
         const kRes = await fetch(`${KRONOS_API_URL}/predict`, {
            method: "POST", headers: { "Content-Type": "application/json" },
-           body: JSON.stringify(reqBody)
+           body: JSON.stringify(reqBody),
+           signal: AbortSignal.timeout(60000), // 1 min timeout for gold predictions
         });
         if (kRes.ok) {
            const kData = await kRes.json();
