@@ -104,12 +104,11 @@ export async function register() {
     }
   };
 
-  // ── Kronos predictions scheduler ──────────────────────────────────────────
-  // Runs every 60 min during EGX market hours (Sun–Thu, 10:00–14:30 Cairo).
-  let lastKronosRun = 0;
   const KRONOS_URL = `http://localhost:${PORT}/api/cron/kronos`;
-
+  let isKronosRunning = false;
   const runKronosScan = async () => {
+    if (isKronosRunning) return;
+    isKronosRunning = true;
     try {
       // BREAKING LIMITS: No market hour checks, no 60 minute cooldown. 
       // We run this every 1 minute 24/7 to aggressively scan the whole market.
@@ -133,6 +132,8 @@ export async function register() {
       }
     } catch (err) {
       console.error(`[goldmine] ✗ Kronos scheduler error:`, err);
+    } finally {
+      isKronosRunning = false;
     }
   };
 

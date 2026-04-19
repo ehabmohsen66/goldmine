@@ -109,7 +109,7 @@ export async function GET() {
       const conviction = Math.min(
         100,
         Math.round(
-          remainingUpside * 1.5 +   // upside magnitude (main driver)
+          remainingUpside * 15.0 +   // upside magnitude (scaled 10x for daily predictions)
           accuracyBonus +            // track record
           freshnessScore * 0.2 +     // freshness
           entryBonus                 // entry quality
