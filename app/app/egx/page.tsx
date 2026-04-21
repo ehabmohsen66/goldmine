@@ -760,12 +760,23 @@ export default function EgxPage() {
               <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>دقة التوقعات</p>
               {kronosHistoryLoading ? (
                 <div className="skeleton" style={{ width: 60, height: 36, margin: "0 auto" }} />
-              ) : (
-                <p style={{ fontSize: 32, fontWeight: 800, color: "#818cf8" }}>
-                  {kronosHistory?.stats?.accuracy !== null ? `${kronosHistory?.stats?.accuracy}%` : "—"}
+              ) : (() => {
+                const acc = kronosHistory?.stats?.accuracy;
+                const color = acc === null ? "#818cf8" : acc >= 55 ? "#22C55E" : acc >= 40 ? "#EAB308" : "#EF4444";
+                return (
+                  <p style={{ fontSize: 32, fontWeight: 800, color }}>
+                    {acc !== null && acc !== undefined ? `${acc}%` : "—"}
+                  </p>
+                );
+              })()}
+              <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>
+                Direction Accuracy
+              </p>
+              {(kronosHistory?.stats?.skippedHoliday ?? 0) > 0 && (
+                <p style={{ fontSize: 9, color: "rgba(234,179,8,0.7)", marginTop: 3 }}>
+                  ⚠️ {kronosHistory.stats.skippedHoliday} توقع مستثنى (عطلة)
                 </p>
               )}
-              <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>Direction Accuracy</p>
             </div>
 
             {/* Total Predictions */}
@@ -808,6 +819,25 @@ export default function EgxPage() {
               )}
               <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>Incorrect Direction</p>
             </div>
+
+            {/* Holiday excluded card — only shows when relevant */}
+            {(kronosHistory?.stats?.skippedHoliday ?? 0) > 0 && (
+              <div className="glass-card" style={{
+                padding: "20px", textAlign: "center",
+                background: "rgba(234,179,8,0.04)",
+                border: "1px solid rgba(234,179,8,0.2)",
+              }}>
+                <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>مستثنى عطلة</p>
+                {kronosHistoryLoading ? (
+                  <div className="skeleton" style={{ width: 40, height: 36, margin: "0 auto" }} />
+                ) : (
+                  <p style={{ fontSize: 32, fontWeight: 800, color: "#EAB308" }}>
+                    {kronosHistory?.stats?.skippedHoliday ?? 0}
+                  </p>
+                )}
+                <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>توقع وقت الإغلاق</p>
+              </div>
+            )}
           </div>
 
           {/* Prediction History Cards */}
@@ -1324,8 +1354,29 @@ export default function EgxPage() {
       {/* ── PAPER TRADING P&L TAB ── */}
       {tab === "paper" && (
         <div>
+          {/* How-it-works banner */}
+          <div style={{
+            marginBottom: 16, padding: "14px 20px", borderRadius: 14, direction: "rtl",
+            background: "linear-gradient(135deg, rgba(34,197,94,0.07) 0%, rgba(34,197,94,0.02) 100%)",
+            border: "1px solid rgba(34,197,94,0.2)",
+            display: "flex", alignItems: "flex-start", gap: 12,
+          }}>
+            <span style={{ fontSize: 20, flexShrink: 0 }}>💡</span>
+            <div>
+              <p style={{ fontSize: 13, fontWeight: 700, color: "#22C55E", marginBottom: 4 }}>كيف يعمل Paper Trading؟</p>
+              <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
+                كرون Kronos يعمل <b style={{ color: "var(--text-primary)" }}>كل دقيقة</b> ويحلّل
+                <b style={{ color: "var(--text-primary)" }}> 5 أسهم</b> في كل دورة (≈300 سهم/ساعة).
+                عند توقع ارتفاع → يُفتح تلقائياً Paper Trade بـ 1000 جنيه افتراضي.
+                بعد 24 ساعة يُغلق ويقارن بسعر الإغلاق الفعلي. عدد الصفقات الحالي قليل لأن النظام
+                <b style={{ color: "#EAB308" }}> بدأ حديثاً</b> — سيزداد بشكل ملحوظ خلال 24-48 ساعة القادمة.
+              </p>
+            </div>
+          </div>
+
           {/* Stats Overview */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12, marginBottom: 20 }}>
+
             {/* Total P&L */}
             <div className="glass-card" style={{
               padding: "20px", textAlign: "center",

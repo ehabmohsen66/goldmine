@@ -59,15 +59,22 @@ export async function GET() {
         const actualChangePct =
           ((actualPrice - record.priceAtPrediction) / record.priceAtPrediction) * 100;
         const predictedDirection = record.predictedChangePercent > 0 ? "up" : "down";
-        // Bug fix: treat zero actual change as "up" to avoid false negatives
-        // (a stock that didn't move wasn't predicted wrong if we said "up")
+
+        // Bug fix: if the stock price didn't move at all (< 0.05%), the prediction was
+        // made during a market closure (weekend/holiday) and the settlement price is
+        // unchanged. Don't count this as wrong — mark as inconclusive.
+        const priceMovedEnough = Math.abs(actualChangePct) >= 0.05;
         const actualDirection = actualChangePct >= 0 ? "up" : "down";
+        const isCorrect = priceMovedEnough ? predictedDirection === actualDirection : true; // inconclusive = neutral
+        const validForAccuracy = priceMovedEnough; // only count in accuracy stats if price actually moved
 
         const update: Partial<KronosPredictionRecord> = {
           actualPrice,
           actualChangePercent: +actualChangePct.toFixed(3),
           checkedAt: new Date().toISOString(),
-          directionCorrect: predictedDirection === actualDirection,
+          directionCorrect: isCorrect,
+          // @ts-ignore - extra field for UI/stats filtering
+          validForAccuracy,
         };
 
         try {
@@ -117,10 +124,13 @@ export async function GET() {
         : record.actualChangePercent ?? null,
     }));
 
-    // Compute stats
+    // Compute stats — only count predictions where the market actually moved
+    // (validForAccuracy = false means the price didn't change, i.e. a weekend/holiday settlement)
     const checked = enriched.filter((r) => r.directionCorrect !== undefined);
-    const correct = checked.filter((r) => r.directionCorrect === true).length;
-    const total = checked.length;
+    const validChecked = checked.filter((r) => (r as any).validForAccuracy !== false);
+    const skippedHoliday = checked.length - validChecked.length;
+    const correct = validChecked.filter((r) => r.directionCorrect === true).length;
+    const total = validChecked.length;
 
     return NextResponse.json({
       predictions: enriched,
@@ -128,6 +138,7 @@ export async function GET() {
         total: enriched.length,
         checked: total,
         correct,
+        skippedHoliday, // predictions made during market closure — excluded from accuracy
         accuracy: total > 0 ? Math.round((correct / total) * 100) : null,
       },
     });

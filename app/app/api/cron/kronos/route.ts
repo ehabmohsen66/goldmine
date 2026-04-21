@@ -52,8 +52,9 @@ export async function GET(request: Request) {
       return timeA - timeB;
     });
     
-    // Process 2 stocks per cycle (runs every minute = 120 stocks/hour)
-    const symbolsToPredict = allSymbols.slice(0, 2);
+    // Process 5 stocks per cycle (runs every minute = 300 stocks/hour)
+    // This ensures the full ~250 stock EGX market rotates fully in under 1 hour
+    const symbolsToPredict = allSymbols.slice(0, 5);
 
     // Bug fix: load existing paper trades to prevent duplicate paper trades per symbol per day
     const existingPaperTrades = await getPaperTrades(500);
