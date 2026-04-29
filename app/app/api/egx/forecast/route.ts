@@ -50,14 +50,13 @@ export async function generateForecast(symbol: string) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
            symbol: yahooSymbol,
-           // Bug fix: cap lookback to actual available candles to avoid model input mismatch
+           // Cap lookback to actual available candles (Kronos max context = 512)
            lookback: Math.min(400, candles.length - 1),
-           pred_len: 1, // predict ONLY tomorrow
-           freq: "1D",    // daily interval
+           pred_len: 65, // ~3 months of trading days (EGX trades Sun–Thu)
+           freq: "1D",   // daily candles
            candles: candles
         }),
-        // Bug fix: timeout per prediction — if Kronos engine hangs (OOM/deadlock), don't block cron forever
-        signal: AbortSignal.timeout(120000), // 2 minutes max per stock
+        signal: AbortSignal.timeout(180000), // 3 minutes — 65-step forecast takes longer
     }).catch(e => { throw new Error(`Kronos Network Error (${kronosUrl}): ${e.message}. Is the Engine Online?`); });
 
     if (!kReq.ok) {
@@ -83,7 +82,7 @@ export async function generateForecast(symbol: string) {
         predictedLow,
         predictedChangePercent: predictedChangePct,
         predictedEndPrice: endPrice,
-        predictionDays: 1,
+        predictionDays: 65,
       });
     } catch (e) {
       console.warn("Failed to log Kronos prediction to history:", e);

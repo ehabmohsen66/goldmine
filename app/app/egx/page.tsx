@@ -1037,7 +1037,7 @@ export default function EgxPage() {
                     Kronos AI · {kronosSymbol}
                   </h3>
                   <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
-                    Foundation model trained on 45 global exchanges · AAAI 2026
+                    توقع يومي · 3 أشهر قادمة (65 يوم تداول) · مدرب على 45 بورصة عالمية
                   </p>
                 </div>
               </div>
@@ -1069,7 +1069,7 @@ export default function EgxPage() {
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
                     {[
                       { label: "السعر الحالي", value: `${kronosData.currentPrice.toFixed(2)} EGP`, color: "var(--text-primary)" },
-                      { label: "هدف Kronos", value: `${lastPred.toFixed(2)} EGP`, color: isUp ? "#22C55E" : "#EF4444" },
+                      { label: "هدف 3 أشهر", value: `${lastPred.toFixed(2)} EGP`, color: isUp ? "#22C55E" : "#EF4444" },
                       { label: "التغير المتوقع", value: `${isUp ? "+" : ""}${pct.toFixed(2)}%`, color: isUp ? "#22C55E" : "#EF4444" },
                     ].map(({ label, value, color }) => (
                       <div key={label} style={{ padding: "12px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 12, textAlign: "center" }}>
@@ -1147,7 +1147,7 @@ export default function EgxPage() {
                       display: "flex", alignItems: "center", gap: 8,
                     }}>
                       {isUp ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
-                      {isUp ? "Kronos يتوقع ارتفاعاً" : "Kronos يتوقع انخفاضاً"} · {isUp ? "+" : ""}{pct.toFixed(2)}%
+                      {isUp ? "Kronos يتوقع ارتفاعاً خلال 3 أشهر" : "Kronos يتوقع انخفاضاً خلال 3 أشهر"} · {isUp ? "+" : ""}{pct.toFixed(2)}%
                     </span>
                   </div>
                 </>
