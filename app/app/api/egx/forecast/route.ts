@@ -4,7 +4,7 @@ import { logKronosPrediction } from "@/lib/redis";
 export const runtime = "nodejs";
 
 // Transform TV symbol like "COMI" to Yahoo "COMI.CA"
-export async function generateForecast(symbol: string) {
+export async function generateForecast(symbol: string, predLen = 65) {
   const yahooSymbol = `${symbol}.CA`;
   const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=1d&range=2y`;
 
@@ -52,7 +52,7 @@ export async function generateForecast(symbol: string) {
            symbol: yahooSymbol,
            // Cap lookback to actual available candles (Kronos max context = 512)
            lookback: Math.min(400, candles.length - 1),
-           pred_len: 65, // ~3 months of trading days (EGX trades Sun–Thu)
+           pred_len: predLen, // 65 = 3 months, 21 = 1 month
            freq: "1D",   // daily candles
            candles: candles
         }),
@@ -82,7 +82,7 @@ export async function generateForecast(symbol: string) {
         predictedLow,
         predictedChangePercent: predictedChangePct,
         predictedEndPrice: endPrice,
-        predictionDays: 65,
+        predictionDays: predLen,
       });
     } catch (e) {
       console.warn("Failed to log Kronos prediction to history:", e);
@@ -99,10 +99,10 @@ export async function generateForecast(symbol: string) {
 
 export async function POST(req: Request) {
   try {
-    const { symbol } = await req.json();
+    const { symbol, predLen } = await req.json();
     if (!symbol) return NextResponse.json({ error: "Symbol required" }, { status: 400 });
     
-    const result = await generateForecast(symbol);
+    const result = await generateForecast(symbol, predLen ?? 65);
     return NextResponse.json(result);
 
   } catch (err: any) {

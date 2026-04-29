@@ -245,7 +245,7 @@ function MoodBar({ bullish, neutral, bearish }: { bullish: number; neutral: numb
 export default function EgxPage() {
   const [data, setData]             = useState<EgxBriefResponse | null>(null);
   const [loading, setLoading]       = useState(true);
-  const [tab, setTab]               = useState<"market" | "portfolio" | "history" | "picks" | "results">("market");
+  const [tab, setTab]               = useState<"market" | "portfolio" | "history" | "picks" | "results" | "sunday">("market");
   const [strongBuyOnly, setStrongBuyOnly] = useState(false);
   
   // AI Upload State
@@ -253,7 +253,54 @@ export default function EgxPage() {
   const [aiError, setAiError] = useState("");
   const [recommendations, setRecommendations] = useState<any[] | null>(null);
 
-  // Buy Picks Tab State
+  // ── Sunday Buy List ───────────────────────────────────────────────
+  // Per-stock Kronos validation state: symbol → { loading, result }
+  const [sundayPicks, setSundayPicks] = useState<any[]>([]);
+  const [sundayLoading, setSundayLoading] = useState(false);
+  const [kronosResults, setKronosResults] = useState<Record<string, { loading: boolean; data: any | null; error: string | null }>>({});
+
+  const fetchSundayPicks = useCallback(async () => {
+    setSundayLoading(true);
+    try {
+      const res = await fetch("/api/signals/picks");
+      if (res.ok) {
+        const d = await res.json();
+        // Take top 10 bullish picks
+        setSundayPicks((d.picks ?? []).slice(0, 10));
+      }
+    } catch { /* silent */ }
+    finally { setSundayLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    if (tab === "sunday" && sundayPicks.length === 0) fetchSundayPicks();
+  }, [tab, sundayPicks.length, fetchSundayPicks]);
+
+  // Run Kronos for a single stock (1-month = 21 trading days)
+  const runKronosValidation = async (symbol: string) => {
+    setKronosResults(prev => ({ ...prev, [symbol]: { loading: true, data: null, error: null } }));
+    try {
+      const res = await fetch("/api/egx/forecast", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbol, predLen: 21 }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const d = await res.json();
+      setKronosResults(prev => ({ ...prev, [symbol]: { loading: false, data: d, error: null } }));
+    } catch (e: any) {
+      setKronosResults(prev => ({ ...prev, [symbol]: { loading: false, data: null, error: e.message } }));
+    }
+  };
+
+  // Run Kronos on ALL picks simultaneously
+  const runAllKronos = () => {
+    sundayPicks.forEach(p => {
+      if (!kronosResults[p.symbol]?.data && !kronosResults[p.symbol]?.loading) {
+        runKronosValidation(p.symbol);
+      }
+    });
+  };
   const [picksData, setPicksData] = useState<any | null>(null);
   const [picksLoading, setPicksLoading] = useState(false);
 
@@ -527,6 +574,16 @@ export default function EgxPage() {
         }} onClick={() => setTab("results")}>
           <CheckCircle2 size={12} style={{ display: "inline", marginRight: 5 }} />
           📊 نتائج التوقعات
+        </button>
+        <button style={{
+          ...TAB_STYLE(tab === "sunday"),
+          background: tab === "sunday" ? "rgba(234,179,8,0.15)" : "transparent",
+          color: tab === "sunday" ? "#EAB308" : "var(--text-muted)",
+          outline: tab === "sunday" ? "1px solid rgba(234,179,8,0.3)" : "none",
+          fontWeight: tab === "sunday" ? 800 : 500,
+        }} onClick={() => setTab("sunday")}>
+          <Zap size={12} style={{ display: "inline", marginRight: 5 }} />
+          🗓️ قائمة الأحد
         </button>
       </div>
 
@@ -997,7 +1054,200 @@ export default function EgxPage() {
         </div>
       )}
 
-      {/* ── Footer ── */}
+      {/* ── SUNDAY BUY LIST TAB ── */}
+      {tab === "sunday" && (
+        <div>
+          {/* Header banner */}
+          <div style={{
+            marginBottom: 20, padding: "20px 24px", borderRadius: 16,
+            background: "linear-gradient(135deg, rgba(234,179,8,0.12) 0%, rgba(234,179,8,0.04) 100%)",
+            border: "1px solid rgba(234,179,8,0.3)",
+            display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{
+                width: 46, height: 46, borderRadius: 14,
+                background: "linear-gradient(135deg, #EAB308, #ca8a04)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                boxShadow: "0 0 24px rgba(234,179,8,0.4)",
+                flexShrink: 0,
+              }}>
+                <Zap size={22} color="#fff" />
+              </div>
+              <div>
+                <h2 style={{ fontSize: 17, fontWeight: 800, color: "var(--text-primary)" }}>
+                  🗓️ قائمة الأحد — ماذا تشتري هذا الأسبوع؟
+                </h2>
+                <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>
+                  أفضل 10 أسهم للشراء يوم الأحد · توقع Kronos AI لمدة شهر (21 يوم تداول) · اضغط "تحقق Kronos" لكل سهم
+                </p>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button
+                onClick={runAllKronos}
+                disabled={sundayLoading || sundayPicks.length === 0}
+                style={{
+                  padding: "8px 16px", borderRadius: 10, fontSize: 12, fontWeight: 700,
+                  background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+                  color: "#fff", border: "none", cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: 6,
+                  opacity: sundayPicks.length === 0 ? 0.5 : 1,
+                  boxShadow: "0 0 16px rgba(99,102,241,0.4)",
+                }}
+              >
+                <BrainCircuit size={14} /> تحقق Kronos على الكل
+              </button>
+              <button
+                className="btn-ghost"
+                onClick={() => { setSundayPicks([]); setKronosResults({}); fetchSundayPicks(); }}
+                style={{ padding: "8px 14px", display: "flex", alignItems: "center", gap: 5, fontSize: 12 }}
+              >
+                <RefreshCw size={12} /> تحديث القائمة
+              </button>
+            </div>
+          </div>
+
+          {/* Picks list */}
+          {sundayLoading ? (
+            [...Array(5)].map((_, i) => <div key={i} className="skeleton" style={{ height: 100, borderRadius: 14, marginBottom: 12 }} />)
+          ) : !sundayPicks.length ? (
+            <div className="glass-card" style={{ padding: "60px 24px", textAlign: "center" }}>
+              <Zap size={36} style={{ margin: "0 auto 16px", opacity: 0.15 }} />
+              <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)" }}>جاري تحميل قائمة الأسهم...</p>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {sundayPicks.map((pick: any, idx: number) => {
+                const kr = kronosResults[pick.symbol];
+                const isKronosLoading = kr?.loading === true;
+                const kronosData = kr?.data;
+                const kronosError = kr?.error;
+
+                // Calculate Kronos verdict
+                let kronosPct: number | null = null;
+                let kronosUp: boolean | null = null;
+                if (kronosData?.forecast?.length) {
+                  const last = kronosData.forecast[kronosData.forecast.length - 1].close;
+                  kronosPct = ((last - kronosData.currentPrice) / kronosData.currentPrice) * 100;
+                  kronosUp = kronosPct >= 0;
+                }
+
+                // Combined score: signal + kronos
+                const bothConfirm = kronosUp === true;
+                const kronosWarns = kronosUp === false;
+
+                const cardBg = bothConfirm
+                  ? "rgba(34,197,94,0.05)"
+                  : kronosWarns
+                  ? "rgba(239,68,68,0.04)"
+                  : "rgba(255,255,255,0.02)";
+                const cardBorder = bothConfirm
+                  ? "rgba(34,197,94,0.25)"
+                  : kronosWarns
+                  ? "rgba(239,68,68,0.2)"
+                  : "rgba(255,255,255,0.08)";
+
+                const rankColor = idx === 0 ? "#F59E0B" : idx === 1 ? "#94A3B8" : idx === 2 ? "#CD7F32" : "var(--text-muted)";
+
+                return (
+                  <div key={pick.symbol} style={{
+                    padding: "18px 22px", borderRadius: 14,
+                    background: cardBg, border: `1px solid ${cardBorder}`,
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    flexWrap: "wrap", gap: 14,
+                    transition: "all 0.3s",
+                  }}>
+                    {/* Left: rank + symbol */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 14, flex: "1 1 200px" }}>
+                      <span style={{ fontSize: 16, fontWeight: 900, color: rankColor, minWidth: 28 }}>#{idx + 1}</span>
+                      <div>
+                        <p style={{ fontSize: 18, fontWeight: 900, color: "var(--text-primary)" }}>{pick.symbol}</p>
+                        <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 1 }}>{pick.name}</p>
+                        <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3 }}>💡 {pick.reason}</p>
+                      </div>
+                    </div>
+
+                    {/* Middle: price + signal score */}
+                    <div style={{ display: "flex", gap: 20, alignItems: "center", flex: "0 0 auto" }}>
+                      <div style={{ textAlign: "center" }}>
+                        <p style={{ fontSize: 10, color: "var(--text-muted)" }}>السعر</p>
+                        <p style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>{pick.price.toFixed(2)}</p>
+                      </div>
+                      <div style={{ textAlign: "center" }}>
+                        <p style={{ fontSize: 10, color: "var(--text-muted)" }}>التغير</p>
+                        <p style={{ fontSize: 14, fontWeight: 700, color: pick.change >= 0 ? "#22C55E" : "#EF4444" }}>
+                          {pick.change >= 0 ? "+" : ""}{pick.change.toFixed(1)}%
+                        </p>
+                      </div>
+                      <div style={{ textAlign: "center" }}>
+                        <p style={{ fontSize: 10, color: "var(--text-muted)" }}>إشارة</p>
+                        <p style={{ fontSize: 13, fontWeight: 800, color: pick.score >= 70 ? "#22C55E" : "#818cf8" }}>{pick.score}/100</p>
+                      </div>
+                    </div>
+
+                    {/* Right: Kronos result or button */}
+                    <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 10 }}>
+                      {isKronosLoading ? (
+                        <span style={{ fontSize: 12, color: "#818cf8", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                          <div style={{ width: 14, height: 14, border: "2px solid rgba(99,102,241,0.3)", borderTopColor: "#818cf8", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+                          Kronos يحلل...
+                        </span>
+                      ) : kronosPct !== null ? (
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                          <span style={{
+                            fontSize: 11, fontWeight: 800, padding: "4px 12px", borderRadius: 20,
+                            background: bothConfirm ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.12)",
+                            color: bothConfirm ? "#22C55E" : "#EF4444",
+                            border: `1px solid ${bothConfirm ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.25)"}`,
+                            display: "flex", alignItems: "center", gap: 5,
+                          }}>
+                            {bothConfirm ? <CheckCircle2 size={11} /> : <XCircle size={11} />}
+                            {bothConfirm ? "Kronos يؤكد ✅" : "Kronos يحذر ⚠️"}
+                          </span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: kronosUp ? "#22C55E" : "#EF4444", textAlign: "right" }}>
+                            هدف شهر: {kronosData.forecast[kronosData.forecast.length-1].close.toFixed(2)} EGP ({kronosUp ? "+" : ""}{kronosPct.toFixed(1)}%)
+                          </span>
+                        </div>
+                      ) : kronosError ? (
+                        <span style={{ fontSize: 11, color: "#EF4444", maxWidth: 160 }}>خطأ: {kronosError.slice(0, 60)}</span>
+                      ) : (
+                        <button
+                          onClick={() => runKronosValidation(pick.symbol)}
+                          style={{
+                            background: "linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.15))",
+                            color: "#818cf8", border: "1px solid rgba(99,102,241,0.35)",
+                            padding: "8px 16px", borderRadius: 10, fontSize: 12, fontWeight: 700,
+                            cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+                            transition: "all 0.15s",
+                          }}
+                        >
+                          <BrainCircuit size={14} /> تحقق Kronos
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Legend */}
+              <div style={{ padding: "14px 18px", borderRadius: 12, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", display: "flex", gap: 20, flexWrap: "wrap", marginTop: 4 }}>
+                <span style={{ fontSize: 11, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 6 }}>
+                  <CheckCircle2 size={12} color="#22C55E" /> <b style={{ color: "#22C55E" }}>Kronos يؤكد</b> = الإشارة التقنية + Kronos AI كلاهما يتوقع ارتفاعاً خلال شهر
+                </span>
+                <span style={{ fontSize: 11, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 6 }}>
+                  <XCircle size={12} color="#EF4444" /> <b style={{ color: "#EF4444" }}>Kronos يحذر</b> = الإشارة إيجابية لكن Kronos يرى انخفاضاً — تجنب أو انتظر
+                </span>
+                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                  ⚠️ هذا ليس نصيحة مالية · استخدم كأداة بحث فقط
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+
       <div style={{ marginTop: 24, textAlign: "center" }}>
         <p style={{ fontSize: 11, color: "var(--text-muted)" }}>
           <Zap size={10} style={{ display: "inline", marginRight: 4 }} />
