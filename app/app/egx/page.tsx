@@ -96,7 +96,7 @@ function timeSince(iso: string): string {
   return `${Math.floor(secs / 86400)}ي`;
 }
 
-function StockRow({ stock }: { stock: EgxStock }) {
+function StockRow({ stock, onPredict }: { stock: EgxStock; onPredict?: (sym: string) => void }) {
   const isPos = stock.change >= 0;
   return (
     <div style={{
@@ -122,6 +122,21 @@ function StockRow({ stock }: { stock: EgxStock }) {
         </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        {onPredict && (
+          <button
+            onClick={() => onPredict(stock.symbol)}
+            title="Kronos AI Forecast"
+            style={{
+              background: "rgba(99,102,241,0.15)", color: "#818cf8",
+              border: "1px solid rgba(99,102,241,0.3)",
+              padding: "4px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600,
+              display: "flex", alignItems: "center", gap: 4, cursor: "pointer",
+              transition: "all 0.15s",
+            }}
+          >
+            <BrainCircuit size={12} /> AI
+          </button>
+        )}
         <span style={{
           fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 5, minWidth: 50, textAlign: "center",
           background: `${signalColor(stock.signal)}22`,
@@ -135,7 +150,7 @@ function StockRow({ stock }: { stock: EgxStock }) {
   );
 }
 
-function PortfolioCard({ pos }: { pos: EgxPosition; }) {
+function PortfolioCard({ pos, onPredict }: { pos: EgxPosition; onPredict?: (sym: string) => void }) {
   const ageH = (Date.now() - new Date(pos.alertedAt).getTime()) / 3600000;
   const sc = signalColor(pos.lastSignal);
   return (
@@ -150,6 +165,20 @@ function PortfolioCard({ pos }: { pos: EgxPosition; }) {
           <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{pos.name}</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {onPredict && (
+            <button
+              onClick={() => onPredict(pos.symbol)}
+              title="Kronos AI Forecast"
+              style={{
+                background: "rgba(99,102,241,0.15)", color: "#818cf8",
+                border: "1px solid rgba(99,102,241,0.3)",
+                padding: "4px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600,
+                display: "flex", alignItems: "center", gap: 4, cursor: "pointer",
+              }}
+            >
+              <BrainCircuit size={12} /> AI
+            </button>
+          )}
           <span style={{
             fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 5,
             background: `${sc}22`, border: `1px solid ${sc}44`, color: sc,
@@ -257,6 +286,32 @@ export default function EgxPage() {
   useEffect(() => {
     if (tab === "results" && !resultsData) fetchResults();
   }, [tab, resultsData, fetchResults]);
+
+  // ── Kronos AI Forecast Modal ────────────────────────────────────────────
+  const [kronosSymbol, setKronosSymbol] = useState<string | null>(null);
+  const [kronosLoading, setKronosLoading] = useState(false);
+  const [kronosData, setKronosData]     = useState<any | null>(null);
+
+  const predictKronos = async (symbol: string) => {
+    setKronosSymbol(symbol);
+    setKronosLoading(true);
+    setKronosData(null);
+    try {
+      const res = await fetch("/api/egx/forecast", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbol }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const d = await res.json();
+      if (d.forecast) setKronosData(d);
+      else throw new Error(d.error || "No forecast");
+    } catch (e: any) {
+      alert("Kronos: " + (e.message || e));
+      setKronosSymbol(null);
+    }
+    setKronosLoading(false);
+  };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -484,7 +539,7 @@ export default function EgxPage() {
               <h2 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>أقوى إشارات الشراء</h2>
             </div>
             {loading ? [...Array(4)].map((_, i) => <div key={i} className="skeleton" style={{ height: 52, borderRadius: 10, marginBottom: 6 }} />) :
-              ov?.topBuys.length ? ov.topBuys.map(s => <StockRow key={s.symbol} stock={s} />) :
+              ov?.topBuys.length ? ov.topBuys.map(s => <StockRow key={s.symbol} stock={s} onPredict={predictKronos} />) :
               <p style={{ color: "var(--text-muted)", fontSize: 13 }}>لا توجد إشارات شراء حالياً</p>}
           </div>
 
@@ -495,7 +550,7 @@ export default function EgxPage() {
             </div>
             <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 10 }}>RSI {"<"} 35 · ارتداد محتمل</p>
             {loading ? [...Array(3)].map((_, i) => <div key={i} className="skeleton" style={{ height: 52, borderRadius: 10, marginBottom: 6 }} />) :
-              ov?.watchlist.length ? ov.watchlist.map(s => <StockRow key={s.symbol} stock={s} />) :
+              ov?.watchlist.length ? ov.watchlist.map(s => <StockRow key={s.symbol} stock={s} onPredict={predictKronos} />) :
               <p style={{ color: "var(--text-muted)", fontSize: 13 }}>لا توجد أسهم ذات RSI منخفض</p>}
           </div>
 
@@ -505,7 +560,7 @@ export default function EgxPage() {
               <h2 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>الأكثر ارتفاعاً</h2>
             </div>
             {loading ? [...Array(3)].map((_, i) => <div key={i} className="skeleton" style={{ height: 52, borderRadius: 10, marginBottom: 6 }} />) :
-              ov?.topGainers.length ? ov.topGainers.map(s => <StockRow key={s.symbol} stock={s} />) :
+              ov?.topGainers.length ? ov.topGainers.map(s => <StockRow key={s.symbol} stock={s} onPredict={predictKronos} />) :
               <p style={{ color: "var(--text-muted)", fontSize: 13 }}>لا توجد بيانات</p>}
           </div>
 
@@ -515,7 +570,7 @@ export default function EgxPage() {
               <h2 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>الأكثر انخفاضاً</h2>
             </div>
             {loading ? [...Array(3)].map((_, i) => <div key={i} className="skeleton" style={{ height: 52, borderRadius: 10, marginBottom: 6 }} />) :
-              ov?.topLosers.length ? ov.topLosers.map(s => <StockRow key={s.symbol} stock={s} />) :
+              ov?.topLosers.length ? ov.topLosers.map(s => <StockRow key={s.symbol} stock={s} onPredict={predictKronos} />) :
               <p style={{ color: "var(--text-muted)", fontSize: 13 }}>لا توجد بيانات</p>}
           </div>
         </div>
@@ -644,7 +699,7 @@ export default function EgxPage() {
             {loading ? (
               [...Array(3)].map((_, i) => <div key={i} className="skeleton" style={{ height: 75, borderRadius: 12, marginBottom: 8 }} />)
             ) : visiblePortfolio.length ? (
-              visiblePortfolio.map(p => <PortfolioCard key={p.symbol} pos={p} />)
+              visiblePortfolio.map(p => <PortfolioCard key={p.symbol} pos={p} onPredict={predictKronos} />)
             ) : strongBuyOnly ? (
               <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--text-muted)" }}>
                 <span style={{ fontSize: 36, display: "block", marginBottom: 12 }}>⚡</span>
@@ -946,9 +1001,161 @@ export default function EgxPage() {
       <div style={{ marginTop: 24, textAlign: "center" }}>
         <p style={{ fontSize: 11, color: "var(--text-muted)" }}>
           <Zap size={10} style={{ display: "inline", marginRight: 4 }} />
-          تنبيهات تلقائية كل 30 دقيقة · الأحد–الخميس 10:00–14:30 · TradingView
+          تنبيهات تلقائية كل 30 دقيقة · الأحد–الخميس 10:00–14:30 · TradingView · Kronos AI (AAAI 2026)
         </p>
       </div>
+
+      {/* ── Kronos AI Forecast Modal ── */}
+      {kronosSymbol && (
+        <div style={{
+          position: "fixed", inset: 0,
+          background: "rgba(0,0,0,0.85)", zIndex: 1000,
+          display: "flex", justifyContent: "center", alignItems: "center", padding: 20,
+          backdropFilter: "blur(6px)",
+        }} onClick={() => setKronosSymbol(null)}>
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: "#0f0f13", border: "1px solid rgba(99,102,241,0.4)",
+              borderRadius: 20, padding: 28, width: "100%", maxWidth: 680,
+              boxShadow: "0 24px 60px rgba(0,0,0,0.6), 0 0 60px rgba(99,102,241,0.08) inset",
+            }}
+          >
+            {/* Modal Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{
+                  width: 42, height: 42, borderRadius: 13,
+                  background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  boxShadow: "0 0 20px rgba(99,102,241,0.5)",
+                }}>
+                  <BrainCircuit size={20} color="#fff" />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: 18, fontWeight: 800, color: "#818cf8", letterSpacing: "-0.02em" }}>
+                    Kronos AI · {kronosSymbol}
+                  </h3>
+                  <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
+                    Foundation model trained on 45 global exchanges · AAAI 2026
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setKronosSymbol(null)}
+                style={{ background: "rgba(255,255,255,0.06)", border: "none", color: "var(--text-muted)", cursor: "pointer", borderRadius: 8, padding: "6px 8px", display: "flex" }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Loading State */}
+            {kronosLoading && (
+              <div style={{ padding: "50px 0", textAlign: "center" }}>
+                <div style={{ width: 56, height: 56, borderRadius: "50%", border: "3px solid rgba(99,102,241,0.2)", borderTopColor: "#818cf8", margin: "0 auto 20px", animation: "spin 1s linear infinite" }} />
+                <p style={{ color: "#818cf8", fontWeight: 700, fontSize: 15 }}>جاري تحليل البيانات التاريخية...</p>
+                <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 8 }}>
+                  Kronos يعالج 400 شمعة عبر نموذج Foundation Model المدرب على 45 بورصة عالمية
+                </p>
+              </div>
+            )}
+
+            {/* Forecast Chart */}
+            {!kronosLoading && kronosData?.forecast && (() => {
+              const lastPred = kronosData.forecast[kronosData.forecast.length - 1].close;
+              const pct = ((lastPred - kronosData.currentPrice) / kronosData.currentPrice) * 100;
+              const isUp = pct >= 0;
+              return (
+                <>
+                  {/* Price summary */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
+                    {[
+                      { label: "السعر الحالي", value: `${kronosData.currentPrice.toFixed(2)} EGP`, color: "var(--text-primary)" },
+                      { label: "هدف Kronos", value: `${lastPred.toFixed(2)} EGP`, color: isUp ? "#22C55E" : "#EF4444" },
+                      { label: "التغير المتوقع", value: `${isUp ? "+" : ""}${pct.toFixed(2)}%`, color: isUp ? "#22C55E" : "#EF4444" },
+                    ].map(({ label, value, color }) => (
+                      <div key={label} style={{ padding: "12px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 12, textAlign: "center" }}>
+                        <p style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 5 }}>{label}</p>
+                        <p style={{ fontSize: 16, fontWeight: 800, color }}>{value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Chart */}
+                  <div style={{ margin: "0 -6px" }}>
+                    <Chart
+                      options={{
+                        chart: {
+                          type: "area", animations: { enabled: true, speed: 600 },
+                          toolbar: { show: false }, background: "transparent",
+                          sparkline: { enabled: false },
+                        },
+                        colors: [isUp ? "#22C55E" : "#EF4444"],
+                        fill: {
+                          type: "gradient",
+                          gradient: {
+                            shadeIntensity: 1,
+                            opacityFrom: isUp ? 0.35 : 0.25,
+                            opacityTo: 0,
+                            stops: [0, 100],
+                          },
+                        },
+                        dataLabels: { enabled: false },
+                        stroke: { curve: "smooth", width: 2 },
+                        xaxis: {
+                          type: "datetime",
+                          labels: { style: { colors: "#555", fontSize: "10px" } },
+                          axisBorder: { show: false },
+                          axisTicks: { show: false },
+                        },
+                        yaxis: {
+                          labels: {
+                            formatter: (v: number) => v.toFixed(2),
+                            style: { colors: "#555" },
+                          },
+                        },
+                        grid: { borderColor: "rgba(255,255,255,0.05)", strokeDashArray: 4 },
+                        theme: { mode: "dark" },
+                        tooltip: { x: { format: "dd MMM HH:mm" }, theme: "dark" },
+                        annotations: {
+                          yaxis: [{
+                            y: kronosData.currentPrice,
+                            borderColor: "rgba(255,255,255,0.2)",
+                            borderWidth: 1,
+                            strokeDashArray: 4,
+                            label: {
+                              text: "السعر الحالي",
+                              style: { color: "#fff", background: "rgba(255,255,255,0.1)", fontSize: "10px" },
+                            },
+                          }],
+                        },
+                      }}
+                      series={[{
+                        name: "Kronos Forecast",
+                        data: kronosData.forecast.map((f: any) => [new Date(f.timestamp).getTime(), +f.close.toFixed(3)]),
+                      }]}
+                      type="area"
+                      height={260}
+                    />
+                  </div>
+
+                  {/* Direction badge */}
+                  <div style={{ display: "flex", justifyContent: "center", marginTop: 16 }}>
+                    <span style={{
+                      fontSize: 13, fontWeight: 800, padding: "8px 24px", borderRadius: 30,
+                      background: isUp ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)",
+                      color: isUp ? "#22C55E" : "#EF4444",
+                      border: `1px solid ${isUp ? "rgba(34,197,94,0.35)" : "rgba(239,68,68,0.35)"}`,
+                      display: "flex", alignItems: "center", gap: 8,
+                    }}>
+                      {isUp ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
+                      {isUp ? "Kronos يتوقع ارتفاعاً" : "Kronos يتوقع انخفاضاً"} · {isUp ? "+" : ""}{pct.toFixed(2)}%
+                    </span>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
     </div>
 
   );
