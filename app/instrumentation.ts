@@ -13,7 +13,9 @@ export async function register() {
 
   const INTERVAL_MS = parseInt(process.env.TICK_INTERVAL_MS ?? "60000");
   const PORT = process.env.PORT ?? "3000";
-  const TICK_URL = `http://localhost:${PORT}/api/cron/tick`;
+  const TICK_URL    = `http://localhost:${PORT}/api/cron/tick`;
+  const PICKS_URL   = `http://localhost:${PORT}/api/signals/picks`;
+  const RESULTS_URL = `http://localhost:${PORT}/api/signals/results`;
   const EGX_URL  = `http://localhost:${PORT}/api/cron/egx`;
 
   // Respect CRON_SECRET if set
@@ -137,6 +139,60 @@ export async function register() {
     }
   };
 
+  // ── Daily picks snapshot saver ──────────────────────────────────────────
+  // Runs once at 10:05 AM Cairo (right after market open) to save today's picks
+  // so we can track accuracy next day
+  let lastDailyPicksSave = 0;
+  const saveDailyPicks = async () => {
+    try {
+      const cairoNow = new Date(new Date().toLocaleString("en-US", { timeZone: "Africa/Cairo" }));
+      const h = cairoNow.getHours();
+      const m = cairoNow.getMinutes();
+      const day = cairoNow.getDay(); // 0=Sun … 4=Thu (trading days)
+      const isWeekday = day >= 0 && day <= 4;
+      const isSaveWindow = h === 10 && m >= 5 && m < 10; // 10:05–10:09 Cairo
+
+      if (!isWeekday || !isSaveWindow) return;
+
+      // Rate-limit: only once per 24 hours
+      if (Date.now() - lastDailyPicksSave < 23 * 60 * 60 * 1000) return;
+      lastDailyPicksSave = Date.now();
+
+      console.log("[goldmine] 📋 Saving daily picks snapshot...");
+      // 1. Fetch fresh picks
+      const picksRes = await fetch(`${PICKS_URL}?force=1`, {
+        headers: cronHeaders,
+        signal: AbortSignal.timeout(55000),
+      });
+      if (!picksRes.ok) { console.error("[goldmine] picks fetch failed"); return; }
+      const picksData = await picksRes.json() as any;
+
+      // Combine EGX picks + gold pick
+      const allPicks = [
+        ...(picksData.picks ?? []),
+        ...(picksData.goldPick ? [picksData.goldPick] : []),
+      ];
+
+      if (!allPicks.length) return;
+
+      // 2. Save snapshot for tracking
+      const saveRes = await fetch(RESULTS_URL, {
+        method: "POST",
+        headers: { ...cronHeaders, "Content-Type": "application/json" },
+        body: JSON.stringify({ picks: allPicks }),
+        signal: AbortSignal.timeout(20000),
+      });
+      const saveData = await saveRes.json() as any;
+      if (saveData.ok) {
+        console.log(`[goldmine] ✓ Daily picks snapshot saved — ${saveData.saved} picks for ${saveData.date}`);
+      } else if (saveData.skipped) {
+        console.log(`[goldmine] Daily picks already saved today`);
+      }
+    } catch (err) {
+      console.error(`[goldmine] ✗ Daily picks save error:`, err);
+    }
+  };
+
   // Run gold tick loop
   runTick();
   setInterval(runTick, INTERVAL_MS);
@@ -148,4 +204,8 @@ export async function register() {
   // Kronos: check every minute, the function itself rate-limits to every 60 min
   setInterval(runKronosScan, 60 * 1000);
   runKronosScan(); // run once on startup
+
+  // Daily picks snapshot: check every minute, saves once at 10:05 AM
+  setInterval(saveDailyPicks, 60 * 1000);
+  saveDailyPicks(); // check immediately on startup
 }
